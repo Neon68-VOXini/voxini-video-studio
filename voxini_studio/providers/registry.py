@@ -47,8 +47,12 @@ def build_provider(project, provider_id: str) -> Provider:
         return ComfyUIProvider(
             host=project.comfyui_host,
             port=project.comfyui_port,
+            resolution=project.comfyui_resolution,
+            upscale_to_1080p=project.comfyui_upscale_to_1080p,
             identity_scene_mode=project.comfyui_identity_scene_mode,
             identity_checkpoint=project.comfyui_identity_checkpoint,
+            negative_prompt=project.comfyui_negative_prompt,
+            identity_negative_prompt=project.comfyui_identity_negative_prompt,
         )
     if provider_id == "runway":
         return RunwayProvider(model_id=project.runway_model_id)

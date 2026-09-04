@@ -15,6 +15,7 @@ matches the requirement that the workflows stay user-editable.
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -63,6 +64,11 @@ DEFAULT_IDENTITY_NEGATIVE_PROMPT = (
 )
 
 
+# Matches any leftover, unresolved {{TOKEN}} placeholder after _fill_template
+# has run all of its known substitutions - see _fill_template's use of this.
+_UNRESOLVED_TOKEN_RE = re.compile(r"\{\{[A-Z_]+\}\}")
+
+
 class ComfyUIAPIError(RuntimeError):
     """Raised for any ComfyUI HTTP/API failure (unreachable, HTTP error
     status, malformed response, node/validation errors, job failure)."""
@@ -96,6 +102,8 @@ class ComfyUIProvider(Provider):
         timeout: float = 15.0,
         identity_scene_mode: bool = False,
         identity_checkpoint: str = "sd_xl_base_1.0.safetensors",
+        negative_prompt: Optional[str] = None,
+        identity_negative_prompt: Optional[str] = None,
     ):
         self.host = host
         self.port = port
@@ -110,6 +118,14 @@ class ComfyUIProvider(Provider):
         whenever the scene has a character reference photo. See
         Project.comfyui_identity_scene_mode for the full rationale."""
         self.identity_checkpoint = identity_checkpoint
+        # Empty/None -> fall back to the module-level defaults, same pattern
+        # as identity_checkpoint above. Exposed as constructor params (rather
+        # than only the DEFAULT_*_PROMPT module constants) so
+        # registry.build_provider() can pass through the per-project
+        # Project.comfyui_negative_prompt / comfyui_identity_negative_prompt
+        # overrides - see Project for the rationale (Kandidat 9, task #577).
+        self.negative_prompt = negative_prompt or DEFAULT_NEGATIVE_PROMPT
+        self.identity_negative_prompt = identity_negative_prompt or DEFAULT_IDENTITY_NEGATIVE_PROMPT
 
     @property
     def base_url(self) -> str:
@@ -135,13 +151,28 @@ class ComfyUIProvider(Provider):
 
     # -- workflow templates ----------------------------------------------
 
+    def _load_template_json(self, path: Path) -> dict:
+        """Shared load+parse for load_workflow_template/load_identity_template.
+        These templates are user-editable JSON files (see module docstring),
+        so a hand-edit that breaks the JSON syntax is a realistic failure
+        mode, not just a hypothetical one - without this, it would previously
+        surface as an unguarded json.JSONDecodeError with no ComfyUI/VOXini
+        context, instead of the same clear German ComfyUIAPIError every other
+        failure in this class produces."""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ComfyUIAPIError(
+                f"Workflow-Vorlage ist fehlerhaft (ungueltiges JSON) in {path}: {exc}"
+            ) from exc
+
     def load_workflow_template(self, image_mode: bool) -> dict:
         filename = "wan22_image_to_video.json" if image_mode else "wan22_text_to_video.json"
         path = self.workflows_dir / filename
         if not path.exists():
             raise ComfyUIAPIError(f"Workflow-Vorlage fehlt: {path}")
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return self._load_template_json(path)
 
     def load_identity_template(self) -> dict:
         """Stage-1 template for the identity-scene pipeline (SDXL +
@@ -150,8 +181,7 @@ class ComfyUIProvider(Provider):
         path = self.workflows_dir / "sdxl_instantid_scene.json"
         if not path.exists():
             raise ComfyUIAPIError(f"Workflow-Vorlage fehlt: {path}")
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return self._load_template_json(path)
 
     def _fill_template(
         self,
@@ -187,6 +217,20 @@ class ComfyUIProvider(Provider):
             raw = raw.replace("{{IMAGE_FILENAME}}", json.dumps(image_filename)[1:-1])
         if checkpoint_name is not None:
             raw = raw.replace("{{CHECKPOINT_NAME}}", json.dumps(checkpoint_name)[1:-1])
+        # These templates are user-editable JSON files (see module docstring).
+        # A leftover, unresolved {{TOKEN}} - e.g. from a typo introduced while
+        # hand-editing a template, or a token this method simply doesn't know
+        # about - would otherwise be submitted to ComfyUI verbatim as a
+        # literal string value, which ComfyUI would either reject with a
+        # confusing node-validation error or, worse, silently accept and
+        # generate a wrong/garbage result. Catching it here instead gives a
+        # clear, specific German error pointing at the exact token name.
+        leftover = _UNRESOLVED_TOKEN_RE.findall(raw)
+        if leftover:
+            raise ComfyUIAPIError(
+                "Workflow-Vorlage enthaelt nicht aufgeloeste Platzhalter: "
+                + ", ".join(sorted(set(leftover)))
+            )
         workflow = json.loads(raw)
         workflow.pop("_comment", None)
         return workflow
@@ -260,14 +304,41 @@ class ComfyUIProvider(Provider):
             pass
 
     def get_queue(self) -> dict:
-        resp = self.session.get(f"{self.base_url}/queue", timeout=self.timeout)
-        resp.raise_for_status()
-        return resp.json()
+        """Not currently called anywhere in the app (kept as a documented,
+        properly error-wrapped mirror of ComfyUI's GET /queue endpoint,
+        alongside get_history/get_history, for future queue-status/diagnostic
+        UI - see Kandidat 2, task #577). Same ComfyUIAPIError wrapping as
+        every other network call in this class, instead of leaking a raw
+        requests exception."""
+        try:
+            resp = self.session.get(f"{self.base_url}/queue", timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise ComfyUIAPIError(f"Warteschlangen-Abfrage fehlgeschlagen: {exc}") from exc
+        if resp.status_code != 200:
+            raise ComfyUIAPIError(f"Warteschlangen-Abfrage fehlgeschlagen: HTTP {resp.status_code}")
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise ComfyUIAPIError("Ungueltige Antwort von ComfyUI (kein JSON) bei /queue.") from exc
 
     def get_history(self, prompt_id: str) -> Optional[dict]:
-        resp = self.session.get(f"{self.base_url}/history/{prompt_id}", timeout=self.timeout)
-        resp.raise_for_status()
-        data = resp.json()
+        """Polled repeatedly (every poll_interval, for up to `timeout`
+        seconds) by wait_for_job() - previously used requests' raw
+        raise_for_status()/resp.json(), so a single transient hiccup (a
+        connection reset, ComfyUI answering with a non-200 mid-restart, a
+        truncated response) surfaced as a bare requests/ValueError exception
+        instead of the same clear German ComfyUIAPIError every other
+        failure in this class produces (see Kandidat 2, task #577)."""
+        try:
+            resp = self.session.get(f"{self.base_url}/history/{prompt_id}", timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise ComfyUIAPIError(f"Verlaufs-Abfrage fehlgeschlagen: {exc}") from exc
+        if resp.status_code != 200:
+            raise ComfyUIAPIError(f"Verlaufs-Abfrage fehlgeschlagen: HTTP {resp.status_code}")
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise ComfyUIAPIError("Ungueltige Antwort von ComfyUI (kein JSON) bei /history.") from exc
         return data.get(prompt_id)
 
     def cancel_job(self, prompt_id: str) -> None:
@@ -358,12 +429,15 @@ class ComfyUIProvider(Provider):
                 if chunk:
                     f.write(chunk)
 
-    def _upscale_local(self, src_path: Path, dest_path: Path, target_height: int = 1080) -> None:
+    def _upscale_local(self, src_path: Path, dest_path: Path, target_height: int = 1080) -> bool:
         """Upscales the freshly generated clip to 1080p locally with ffmpeg
         (lanczos scaling), matching the '480p/720p mit lokalem
         1080p-Upscaling' requirement. Runs entirely offline/local - no API
         cost. Falls back to leaving the file at native resolution if ffmpeg
-        is unavailable."""
+        is unavailable - returns False in that case (True on a real
+        upscale) so the caller (_generate) can surface this as
+        GenerationResult.warning instead of the clip silently staying at a
+        lower resolution than requested with zero visible trace."""
         import shutil
         import subprocess
 
@@ -375,7 +449,7 @@ class ComfyUIProvider(Provider):
             if src_path != dest_path:
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(src_path, dest_path)
-            return
+            return False
 
         scale_filter = f"scale=-2:{target_height}:flags=lanczos"
         cmd = [
@@ -388,6 +462,7 @@ class ComfyUIProvider(Provider):
         result = subprocess.run(cmd, capture_output=True)
         if result.returncode != 0:
             raise ComfyUIAPIError(f"Lokales Upscaling fehlgeschlagen: {result.stderr.decode()[-500:]}")
+        return True
 
     # -- identity-scene pipeline (stage 1) ------------------------------
 
@@ -410,7 +485,7 @@ class ComfyUIProvider(Provider):
         workflow = self._fill_template(
             template,
             prompt=request.resolved_prompt,
-            negative_prompt=DEFAULT_IDENTITY_NEGATIVE_PROMPT,
+            negative_prompt=self.identity_negative_prompt,
             width=width,
             height=height,
             seed=uuid.uuid4().int % (2 ** 32),
@@ -478,7 +553,7 @@ class ComfyUIProvider(Provider):
         workflow = self._fill_template(
             template,
             prompt=request.resolved_prompt,
-            negative_prompt=DEFAULT_NEGATIVE_PROMPT,
+            negative_prompt=self.negative_prompt,
             width=width,
             height=height,
             frames=frames,
@@ -493,10 +568,16 @@ class ComfyUIProvider(Provider):
         filename, subfolder, type_ = self._extract_output_file(history)
 
         dest = Path(request.dest_path)
+        warning = ""
         if self.upscale_to_1080p:
             raw_path = dest.with_name(dest.stem + "_raw" + dest.suffix)
             self._download_output(filename, subfolder, type_, raw_path)
-            self._upscale_local(raw_path, dest, target_height=1080)
+            upscaled = self._upscale_local(raw_path, dest, target_height=1080)
+            if not upscaled:
+                warning = (
+                    "1080p-Upscaling übersprungen: ffmpeg wurde nicht gefunden. Der Clip liegt "
+                    f"in der nativen Wan2.2-Auflösung ({self.resolution}) vor."
+                )
             try:
                 raw_path.unlink(missing_ok=True)
             except Exception:
@@ -504,4 +585,4 @@ class ComfyUIProvider(Provider):
         else:
             self._download_output(filename, subfolder, type_, dest)
 
-        return GenerationResult(success=True, file_path=str(dest), actual_cost=0.0)
+        return GenerationResult(success=True, file_path=str(dest), actual_cost=0.0, warning=warning)

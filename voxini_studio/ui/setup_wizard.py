@@ -92,6 +92,19 @@ class LocalSetupPage(QWidget):
         conn_form.addRow("", restart_hint)
         layout.addWidget(conn_box)
 
+        quality_box = QGroupBox("Qualität")
+        quality_form = QFormLayout(quality_box)
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.addItem("480p (schneller)", "480p")
+        self.resolution_combo.addItem("720p (Standard)", "720p")
+        quality_form.addRow("Wan2.2-Auflösung:", self.resolution_combo)
+        self.upscale_checkbox = QCheckBox("Lokal auf 1080p hochskalieren (ffmpeg, nach der Generierung)")
+        quality_form.addRow("", self.upscale_checkbox)
+        self.negative_prompt_edit = QLineEdit()
+        self.negative_prompt_edit.setPlaceholderText("leer = Standard-Negativ-Prompt verwenden")
+        quality_form.addRow("Negativ-Prompt (Wan2.2):", self.negative_prompt_edit)
+        layout.addWidget(quality_box)
+
         identity_box = QGroupBox("Identitäts-Szenen-Pipeline (experimentell)")
         identity_layout = QVBoxLayout(identity_box)
         identity_info = QLabel(
@@ -110,6 +123,9 @@ class LocalSetupPage(QWidget):
         identity_form = QFormLayout()
         self.identity_checkpoint_edit = QLineEdit()
         identity_form.addRow("SDXL-Checkpoint-Dateiname:", self.identity_checkpoint_edit)
+        self.identity_negative_prompt_edit = QLineEdit()
+        self.identity_negative_prompt_edit.setPlaceholderText("leer = Standard-Negativ-Prompt verwenden")
+        identity_form.addRow("Negativ-Prompt (SDXL/InstantID):", self.identity_negative_prompt_edit)
         identity_layout.addLayout(identity_form)
         layout.addWidget(identity_box)
 
@@ -194,6 +210,11 @@ class LocalSetupPage(QWidget):
         self.models_dir_edit.setText(proj.comfyui_models_dir or "(nicht gesetzt)")
         self.identity_scene_checkbox.setChecked(proj.comfyui_identity_scene_mode)
         self.identity_checkpoint_edit.setText(proj.comfyui_identity_checkpoint)
+        idx = self.resolution_combo.findData(proj.comfyui_resolution)
+        self.resolution_combo.setCurrentIndex(idx if idx >= 0 else self.resolution_combo.findData("720p"))
+        self.upscale_checkbox.setChecked(proj.comfyui_upscale_to_1080p)
+        self.negative_prompt_edit.setText(proj.comfyui_negative_prompt)
+        self.identity_negative_prompt_edit.setText(proj.comfyui_identity_negative_prompt)
 
     def apply_to_project(self) -> None:
         proj = self.pm.project
@@ -206,6 +227,10 @@ class LocalSetupPage(QWidget):
         proj.comfyui_identity_checkpoint = (
             self.identity_checkpoint_edit.text().strip() or "sd_xl_base_1.0.safetensors"
         )
+        proj.comfyui_resolution = self.resolution_combo.currentData() or "720p"
+        proj.comfyui_upscale_to_1080p = self.upscale_checkbox.isChecked()
+        proj.comfyui_negative_prompt = self.negative_prompt_edit.text().strip()
+        proj.comfyui_identity_negative_prompt = self.identity_negative_prompt_edit.text().strip()
 
     # -- actions --------------------------------------------------------
     def _pick_install_dir(self) -> None:

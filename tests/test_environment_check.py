@@ -12,6 +12,7 @@ from voxini_studio.core.environment_check import (
     detect_gpu,
     detect_rocm,
     free_disk_space_gb,
+    parse_nvidia_smi_csv,
     parse_rocm_smi_json,
     parse_rocm_version,
     parse_wmi_video_controller_csv,
@@ -49,11 +50,77 @@ def test_parse_wmi_csv_extracts_gpu_and_vram():
     assert info.detected is True
     assert "7600 XT" in info.name
     assert info.vram_bytes == 17179869184
+    assert info.vendor == "amd"
 
 
 def test_parse_wmi_csv_malformed_returns_not_detected():
     info = parse_wmi_video_controller_csv("not,a,valid,header\n1,2,3,4")
     assert info.detected is False
+
+
+# -- Kandidat 1 (task #577): NVIDIA/vendor detection ------------------------
+
+
+def test_parse_wmi_csv_nvidia_row_classified_correctly():
+    csv = '"Name","AdapterRAM"\n"NVIDIA GeForce RTX 3060","4294967295"\n'
+    info = parse_wmi_video_controller_csv(csv)
+    assert info.detected is True
+    assert info.vendor == "nvidia"
+
+
+def test_parse_wmi_csv_prefers_discrete_gpu_over_integrated():
+    # integrated Intel adapter listed first, discrete NVIDIA GPU second -
+    # picking the first row blindly would misreport vendor "unknown" even
+    # though a supported discrete GPU is present.
+    csv = (
+        '"Name","AdapterRAM"\n'
+        '"Intel(R) UHD Graphics 770","1073741824"\n'
+        '"NVIDIA GeForce RTX 4070","4294967295"\n'
+    )
+    info = parse_wmi_video_controller_csv(csv)
+    assert info.detected is True
+    assert info.vendor == "nvidia"
+    assert "RTX 4070" in info.name
+
+
+def test_parse_wmi_csv_unknown_vendor_still_reports_first_row():
+    csv = '"Name","AdapterRAM"\n"Microsoft Basic Display Adapter","0"\n'
+    info = parse_wmi_video_controller_csv(csv)
+    assert info.detected is True
+    assert info.vendor == "unknown"
+
+
+def test_parse_rocm_smi_json_reports_amd_vendor():
+    info = parse_rocm_smi_json(ROCM_SMI_SAMPLE)
+    assert info.vendor == "amd"
+
+
+def test_parse_nvidia_smi_csv_extracts_gpu_and_vram():
+    info = parse_nvidia_smi_csv("NVIDIA GeForce RTX 4070, 12282\n")
+    assert info.detected is True
+    assert info.vendor == "nvidia"
+    assert "RTX 4070" in info.name
+    assert info.vram_bytes == 12282 * 1024 * 1024
+
+
+def test_parse_nvidia_smi_csv_empty_returns_not_detected():
+    info = parse_nvidia_smi_csv("")
+    assert info.detected is False
+
+
+def test_check_environment_nvidia_low_vram_warns_about_cuda_not_rocm(monkeypatch):
+    # Simulate a detected-but-not-yet-installed NVIDIA GPU (pre-install WMI
+    # path) with low VRAM - the warning text must say CUDA, not ROCm.
+    import voxini_studio.core.environment_check as ec
+
+    fake_gpu = ec.GPUInfo(detected=True, name="NVIDIA GeForce GTX 1650", vram_bytes=4 * 1024**3, source="wmi", vendor="nvidia")
+    monkeypatch.setattr(ec, "detect_gpu_and_rocm_via_torch", lambda install_dir: (ec.GPUInfo(detected=False), ec.ROCmInfo(installed=False)))
+    monkeypatch.setattr(ec, "detect_gpu", lambda: fake_gpu)
+    monkeypatch.setattr(ec, "detect_rocm", lambda: ec.ROCmInfo(installed=False))
+
+    report = check_environment(models_dir="")
+    assert any("CUDA" in w for w in report.warnings)
+    assert not any("ROCm wurde nicht gefunden" in w for w in report.warnings)
 
 
 def test_parse_rocm_version():

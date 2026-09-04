@@ -147,7 +147,7 @@ class _GenerationWorker(QObject):
             time.sleep(3.0)  # give Windows a moment to actually release the port
 
         try:
-            subprocess.Popen(
+            process = subprocess.Popen(
                 [str(bat_path)], cwd=str(bat_path.parent),
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
@@ -155,12 +155,27 @@ class _GenerationWorker(QObject):
             self.statusMessage.emit(f"ComfyUI-Neustart fehlgeschlagen: {exc}")
             return False
 
+        # Kandidat 3 (task #577): the launched process is START_COMFYUI.bat,
+        # not ComfyUI itself, so process.poll() only tells us the .bat
+        # (batch-file interpreter) is still alive - not that ComfyUI's
+        # Python process inside it hasn't crashed. Still useful: if the .bat
+        # itself exits early (missing venv, bad path, Windows blocking the
+        # unsigned/relocated script), that's a fast, unambiguous "this
+        # can't work" signal, worth surfacing immediately instead of always
+        # waiting out the full 180s for a generic "not reachable" timeout.
         deadline = time.monotonic() + 180.0
         while time.monotonic() < deadline:
             conn = check_comfyui_connection(proj.comfyui_host, proj.comfyui_port, timeout=2.0)
             if conn.reachable:
                 self.statusMessage.emit("ComfyUI neu gestartet - Generierung läuft weiter ...")
                 return True
+            exit_code = process.poll()
+            if exit_code is not None:
+                self.statusMessage.emit(
+                    f"ComfyUI-Neustart fehlgeschlagen: START_COMFYUI.bat wurde sofort beendet "
+                    f"(Exit-Code {exit_code}) - Lauf wird angehalten."
+                )
+                return False
             time.sleep(2.0)
         self.statusMessage.emit(
             "ComfyUI wurde nach dem Neustart innerhalb von 180s nicht erreichbar - Lauf wird angehalten."
@@ -371,9 +386,19 @@ class GenerationPanel(QWidget):
             # information with zero visible trace in the UI.
             status_item = QTableWidgetItem(_STATUS_LABEL.get(scene.status, scene.status.value))
             last_version = scene.versions[-1] if scene.versions else None
-            if last_version and last_version.reference_warning:
+            # Same treatment for ClipVersion.quality_warning (e.g. a provider
+            # silently having to skip the 1080p upscale, see
+            # ComfyUIProvider._upscale_local / GenerationResult.warning) -
+            # combine with reference_warning if both happen to be set.
+            warnings = [
+                w for w in (
+                    getattr(last_version, "reference_warning", ""),
+                    getattr(last_version, "quality_warning", ""),
+                ) if w
+            ]
+            if last_version and warnings:
                 status_item.setIcon(icon("alert-triangle", theme.palette().gold))
-                status_item.setToolTip(last_version.reference_warning)
+                status_item.setToolTip("\n".join(warnings))
             self.table.setItem(row, 6, status_item)
 
             self.table.setItem(row, 7, QTableWidgetItem(f"{cost:.2f} €"))

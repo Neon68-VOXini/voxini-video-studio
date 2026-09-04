@@ -78,6 +78,13 @@ class ClipVersion(BaseModel):
     generate_scene()). Non-empty even on success, so multi-character or
     multi-reference-image scenes don't silently lose visual identity
     information without the user ever finding out."""
+    quality_warning: str = ""
+    """Set when a provider had to silently degrade quality to still produce
+    a clip - currently: ComfyUIProvider skipping the local 1080p upscale
+    because ffmpeg wasn't found (see ComfyUIProvider._upscale_local /
+    GenerationResult.warning). Non-empty even though the clip generation
+    itself succeeded, so a scene that's quietly stuck at raw Wan2.2
+    resolution doesn't look identical to a properly upscaled one in the UI."""
 
 
 class Scene(BaseModel):
@@ -187,6 +194,26 @@ class Project(BaseModel):
     """SDXL checkpoint filename (must already exist in ComfyUI's
     models/checkpoints/) used for the identity-scene stage above. Only
     read when comfyui_identity_scene_mode is True."""
+
+    comfyui_resolution: str = "720p"
+    """'480p' or '720p' - passed straight to ComfyUIProvider(resolution=...).
+    Exposed here (instead of only being a ComfyUIProvider constructor
+    default nobody could reach) so the setup wizard can let the user trade
+    generation speed against output resolution per project."""
+    comfyui_upscale_to_1080p: bool = True
+    """Whether ComfyUIProvider locally upscales the raw Wan2.2 output to
+    1080p with ffmpeg after generation (see ComfyUIProvider._upscale_local).
+    On by default to match the previous hard-coded behaviour."""
+    comfyui_negative_prompt: str = ""
+    """Empty string = use ComfyUIProvider.DEFAULT_NEGATIVE_PROMPT (the
+    built-in default). Lets an advanced user override the negative prompt
+    used for the main Wan2.2 image/text-to-video stage without editing the
+    workflow JSON or the provider source."""
+    comfyui_identity_negative_prompt: str = ""
+    """Same as comfyui_negative_prompt above, but for the SDXL+InstantID
+    identity-scene stage (see comfyui_identity_scene_mode /
+    ComfyUIProvider.DEFAULT_IDENTITY_NEGATIVE_PROMPT). Empty = built-in
+    default."""
 
     comfyui_restart_every_n_scenes: int = 0
     """0 = disabled (default, unchanged behaviour: only the per-job POST

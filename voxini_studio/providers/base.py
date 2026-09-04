@@ -28,6 +28,13 @@ class GenerationResult:
     file_path: str = ""
     error_message: str = ""
     actual_cost: float = 0.0
+    warning: str = ""
+    """Non-fatal degradation notice for an otherwise-successful result (e.g.
+    ComfyUIProvider skipping the 1080p upscale because ffmpeg wasn't found -
+    see ComfyUIProvider._upscale_local). Empty on a clean success. Copied
+    onto ClipVersion.quality_warning by generation_service.generate_scene()
+    so the UI can surface it, instead of a lower-quality-than-requested clip
+    silently looking identical to a normal one."""
 
 
 @dataclass

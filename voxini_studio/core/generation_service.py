@@ -132,6 +132,7 @@ def generate_scene(
     if result.success:
         version.file_path = Path(result.file_path).relative_to(pm.paths.root).as_posix()
         version.actual_cost = result.actual_cost
+        version.quality_warning = result.warning
         version.accepted = True
         for existing in scene.versions:
             existing.accepted = False

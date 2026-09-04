@@ -54,7 +54,7 @@ Anders als in einer früheren Version dieser Anleitung beschrieben, musst du FFm
 
 ### 2.3 Lokale KI-Umgebung einrichten (für kostenlose lokale Generierung)
 
-Wenn du die kostenlose lokale Generierung über deine eigene AMD-Grafikkarte nutzen möchtest, führe einmalig aus:
+Wenn du die kostenlose lokale Generierung über deine eigene AMD- oder NVIDIA-Grafikkarte nutzen möchtest, führe einmalig aus:
 
 ```
 INSTALL_LOCAL_AI.bat
@@ -62,16 +62,20 @@ INSTALL_LOCAL_AI.bat
 
 Dieses Skript richtet **komplett getrennt** von der App selbst ein:
 
-1. Eine eigene Python-3.12-Umgebung im Unterordner `comfyui_env\venv312` (AMDs offizielle ROCm-PyTorch-Pakete benötigen exakt Python 3.12; die App selbst läuft mit einer anderen Python-Version — beide Umgebungen berühren sich nie und sprechen später nur über eine lokale Netzwerkverbindung (`http://127.0.0.1:8188`) miteinander).
+1. Eine eigene Python-3.12-Umgebung im Unterordner `comfyui_env\venv312` (die ROCm- wie auch die CUDA-PyTorch-Pakete benötigen exakt Python 3.12; die App selbst läuft mit einer anderen Python-Version — beide Umgebungen berühren sich nie und sprechen später nur über eine lokale Netzwerkverbindung (`http://127.0.0.1:8188`) miteinander).
 2. ComfyUI (`comfyui_env\ComfyUI`), heruntergeladen von der offiziellen ComfyUI-GitHub-Seite.
-3. PyTorch mit AMD-ROCm-Unterstützung (offizielle Wheels von `repo.radeon.com`, Stand ROCm 7.2.1 / PyTorch 2.9.1).
+3. PyTorch mit GPU-Unterstützung — das Skript **erkennt deine Grafikkarte automatisch** (über eine Windows-Systemabfrage) und installiert passend dazu entweder AMD-ROCm-Wheels (offiziell von `repo.radeon.com`, Stand ROCm 7.2.1 / PyTorch 2.9.1) oder NVIDIA-CUDA-Wheels (offiziell von `download.pytorch.org`, CUDA 12.4). Wird keine der beiden Grafikkarten eindeutig erkannt, fragt das Skript nach, bevor es ersatzweise eine CPU-only-Installation vornimmt (ohne GPU-Beschleunigung — für Videogenerierung in der Praxis zu langsam, aber immerhin lauffähig zum Testen).
 4. Ein Startskript `comfyui_env\START_COMFYUI.bat`.
 
-**Wichtiger, ehrlicher Hinweis zur GPU-Kompatibilität:** AMDs offizielle Liste unterstützter Grafikkarten für ROCm 7.2.1 unter Windows umfasst aktuell die Architekturen **gfx1100, gfx1101, gfx1200, gfx1201** (u. a. RX 7900 XTX, RX 7700, RX 9070/9070 XT, RX 9060 XT). Die **RX 7600 XT (gfx1102)** steht **nicht** auf dieser offiziellen Liste. Die Installation kann trotzdem versucht werden — PyTorch erkennt die GPU in diesem Fall möglicherweise nicht. Prüfe im Zweifel die aktuelle Liste unter:
+**Wichtiger, ehrlicher Hinweis zur GPU-Kompatibilität (AMD):** AMDs offizielle Liste unterstützter Grafikkarten für ROCm 7.2.1 unter Windows umfasst aktuell die Architekturen **gfx1100, gfx1101, gfx1200, gfx1201** (u. a. RX 7900 XTX, RX 7700, RX 9070/9070 XT, RX 9060 XT). Die **RX 7600 XT (gfx1102)** steht **nicht** auf dieser offiziellen Liste. Die Installation kann trotzdem versucht werden — PyTorch erkennt die GPU in diesem Fall möglicherweise nicht. Prüfe im Zweifel die aktuelle Liste unter:
 
 `https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html`
 
 Falls ROCm auf deiner Karte nicht funktioniert, ist `torch-directml` (Microsofts DirectML-Backend für PyTorch, läuft mit praktisch jeder aktuellen Windows-GPU, allerdings meist langsamer als natives ROCm) eine mögliche Alternative — siehe Abschnitt 8 „Fehlerbehebung“.
+
+**Für NVIDIA-Karten:** Es genügt ein aktueller, normal installierter NVIDIA-Treiber (Game-Ready oder Studio) — ein separates „CUDA Toolkit“ ist **nicht** nötig, die installierten PyTorch-Wheels bringen die benötigten CUDA-Laufzeitbibliotheken bereits mit.
+
+**Ehrlicher Hinweis:** Die automatische Hersteller-Erkennung und der CUDA-Installationspfad wurden vom Entwickler in dieser Umgebung nur so weit geprüft, wie ohne echte Windows-Hardware möglich ist (Skriptlogik/Verzweigungen) — ein echter Durchlauf auf einer realen NVIDIA-GPU steht noch aus. Der bestehende AMD-ROCm-Pfad ist unverändert und weiterhin der auf echter Hardware getestete Standardweg.
 
 Die eigentlichen **Wan2.2-Modelldateien (ca. 17 GB)** werden von `INSTALL_LOCAL_AI.bat` bewusst **nicht** mit heruntergeladen. Das geschieht stattdessen im **Einrichtungsassistenten** direkt in der App (siehe 2.4), wo du Gesamtgröße, benötigten Speicherplatz und Zielordner vorher in einer einzigen Übersicht siehst und einmal bestätigst.
 
@@ -79,8 +83,9 @@ Die eigentlichen **Wan2.2-Modelldateien (ca. 17 GB)** werden von `INSTALL_LOCAL_
 
 Nach dem ersten Start von VOXini Video Studio öffne über den Knopf **„Einrichtungsassistent“** oben in der Kopfzeile den Assistenten. Er hat zwei Reiter:
 
-- **„Lokal (ComfyUI) - kostenlos“**: ComfyUI-Adresse (Host/Port, Standard `127.0.0.1:8188`), Installations- und Modellordner wählen, „Jetzt prüfen“ zeigt eine Übersicht über GPU/ROCm/ComfyUI-Verbindung/vorhandene Modelldateien. Darunter der Knopf **„Fehlende Modelle herunterladen...“**: zeigt vor dem Start EINE zusammengefasste Bestätigung mit Gesamtgröße, benötigtem und verfügbarem Speicherplatz sowie Zielordner für alle noch fehlenden Wan2.2-Dateien (keine Bestätigung mehr pro Einzeldatei). Ist zu wenig Speicherplatz frei, bleibt der „Download starten“-Knopf im Bestätigungsdialog gesperrt. Nach der Bestätigung läuft der Download aller fehlenden Dateien automatisch nacheinander durch, mit gemeinsamer, abbrechbarer Fortschrittsanzeige. Dazu zwei weitere Einstellungen:
+- **„Lokal (ComfyUI) - kostenlos“**: ComfyUI-Adresse (Host/Port, Standard `127.0.0.1:8188`), Installations- und Modellordner wählen, „Jetzt prüfen“ zeigt eine Übersicht über GPU/ROCm/ComfyUI-Verbindung/vorhandene Modelldateien. Darunter der Knopf **„Fehlende Modelle herunterladen...“**: zeigt vor dem Start EINE zusammengefasste Bestätigung mit Gesamtgröße, benötigtem und verfügbarem Speicherplatz sowie Zielordner für alle noch fehlenden Wan2.2-Dateien (keine Bestätigung mehr pro Einzeldatei). Ist zu wenig Speicherplatz frei, bleibt der „Download starten“-Knopf im Bestätigungsdialog gesperrt. Nach der Bestätigung läuft der Download aller fehlenden Dateien automatisch nacheinander durch, mit gemeinsamer, abbrechbarer Fortschrittsanzeige. Dazu weitere Einstellungen:
   - **„ComfyUI automatisch neu starten alle:“** (Zahlenfeld, 0-100, „Aus“ bei 0) — startet ComfyUI nach der eingestellten Anzahl generierter Szenen automatisch neu, um bei längeren Läufen einer VRAM-Fragmentierung unter ROCm entgegenzuwirken. **Hinweis:** Dieses Feature ist funktional vorhanden, aber vom Entwickler noch als experimentell/nicht abschließend bestätigt eingestuft — bei Overnight-Batches also mit etwas Vorsicht nutzen.
+  - **„Qualität“**: Auflösung für die Wan2.2-Generierung (480p = schneller, 720p = Standard), ein Schalter für lokales 1080p-Hochskalieren mit ffmpeg nach der Generierung (an/aus), sowie ein optionales Feld für einen eigenen Negativ-Prompt (leer = eingebauter Standard-Negativ-Prompt wird verwendet). Alle drei sind pro Projekt gespeichert.
   - **„Identitäts-Szenen-Pipeline (experimentell)“**: Checkbox „Identitäts-Szenen-Pipeline verwenden“ + Feld „SDXL-Checkpoint-Dateiname:“. Aktiviert einen zweistufigen lokalen Generierungsweg (SDXL+InstantID komponiert zunächst das Szenenbild mit dem Charaktergesicht, danach animiert Wan2.2 wie gewohnt), was die Charaktertreue in Szenen mit auffälligem Referenzfoto-Hintergrund verbessern kann. Setzt voraus, dass du selbst einmalig ein SDXL-Checkpoint-Modell und den `ComfyUI_InstantID`-Custom-Node in deiner ComfyUI-Installation einrichtest — VOXini lädt das nicht automatisch herunter.
 - **„Cloud (Runway) - kostenpflichtig“**: API-Schlüssel eingeben und **sicher im Windows-Anmeldeinformationsspeicher** speichern (niemals im Klartext in einer Projektdatei), „Verbindung testen (kostenlos)“ prüft nur den Kontostatus ohne einen kostenpflichtigen Auftrag auszulösen, Modellwahl und ein einstellbares **Budgetlimit** in Euro. Aktuell wählbare Modelle: `gen4.5`, `gen4_turbo` (Standard, benötigt zwingend ein Referenzbild), `veo3.1`, `veo3.1_fast`, `seedance2` (das ältere, nicht-versionierte „veo3“ wurde entfernt, da Runway es nicht mehr anbietet).
 

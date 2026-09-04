@@ -50,12 +50,28 @@ REQUIRED_MODELS = [
 MIN_VRAM_GB_RECOMMENDED = 12.0
 
 
+def _guess_gpu_vendor(name: str, hip_version: str = "") -> str:
+    """Classifies a GPU adapter name string as 'nvidia', 'amd', or
+    'unknown' - shared by every detect_* path below (Kandidat 1, task
+    #577) so the rest of the app (INSTALL_LOCAL_AI.bat's ROCm-vs-CUDA
+    branch has its own, independent PowerShell-side copy of this same
+    substring logic; keep them in sync if either changes) can give
+    vendor-appropriate messages instead of assuming AMD/ROCm everywhere."""
+    lowered = (name or "").lower()
+    if "nvidia" in lowered or "geforce" in lowered or "quadro" in lowered or "rtx" in lowered:
+        return "nvidia"
+    if "amd" in lowered or "radeon" in lowered or hip_version:
+        return "amd"
+    return "unknown"
+
+
 @dataclass
 class GPUInfo:
     detected: bool
     name: str = ""
     vram_bytes: int = 0
-    source: str = ""  # "rocm-smi" | "wmi" | "none"
+    source: str = ""  # "rocm-smi" | "wmi" | "torch" | "none"
+    vendor: str = "unknown"  # "nvidia" | "amd" | "unknown"
 
     @property
     def vram_gb(self) -> float:
@@ -121,7 +137,9 @@ def parse_rocm_smi_json(raw_json: str) -> GPUInfo:
                 vram_bytes = int(vram_raw) if vram_raw is not None else 0
             except (TypeError, ValueError):
                 vram_bytes = 0
-            return GPUInfo(detected=True, name=name, vram_bytes=vram_bytes, source="rocm-smi")
+            # rocm-smi is an AMD-only tool, so a card it can enumerate is AMD
+            # by definition - no need to guess from the name string here.
+            return GPUInfo(detected=True, name=name, vram_bytes=vram_bytes, source="rocm-smi", vendor="amd")
     return GPUInfo(detected=False, source="rocm-smi")
 
 
@@ -144,6 +162,14 @@ def parse_wmi_video_controller_csv(raw_csv: str) -> GPUInfo:
     except ValueError:
         return GPUInfo(detected=False, source="wmi")
 
+    # A machine can list several adapters (e.g. an integrated Intel GPU
+    # alongside a discrete AMD/NVIDIA one) - blindly taking the first row
+    # risks picking the integrated GPU and reporting vendor "unknown" even
+    # though a supported discrete GPU is present further down the list.
+    # Collect every row and prefer the first one that's actually
+    # nvidia/amd, falling back to the first row at all only if none
+    # classify as either (Kandidat 1, task #577).
+    candidates: list[GPUInfo] = []
     for row in rows[1:]:
         if len(row) <= max(name_idx, ram_idx):
             continue
@@ -155,8 +181,39 @@ def parse_wmi_video_controller_csv(raw_csv: str) -> GPUInfo:
             vram_bytes = int(ram_raw)
         except ValueError:
             vram_bytes = 0
-        return GPUInfo(detected=True, name=name, vram_bytes=vram_bytes, source="wmi")
+        vendor = _guess_gpu_vendor(name)
+        candidates.append(GPUInfo(detected=True, name=name, vram_bytes=vram_bytes, source="wmi", vendor=vendor))
+
+    for gpu in candidates:
+        if gpu.vendor in ("nvidia", "amd"):
+            return gpu
+    if candidates:
+        return candidates[0]
     return GPUInfo(detected=False, source="wmi")
+
+
+def parse_nvidia_smi_csv(raw_csv: str) -> GPUInfo:
+    """Parses `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits`
+    output, e.g. "NVIDIA GeForce RTX 4070, 12282" (memory.total in MiB).
+    Mirrors parse_rocm_smi_json's role for AMD - nvidia-smi ships with every
+    NVIDIA driver, so this is just as reliable pre-install as rocm-smi is
+    for AMD, and (like rocm-smi) avoids the WMI AdapterRAM 32-bit-VRAM
+    truncation bug entirely (Kandidat 1, task #577)."""
+    for line in raw_csv.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 2:
+            continue
+        name = parts[0]
+        try:
+            vram_bytes = int(round(float(parts[1]) * 1024 * 1024))
+        except ValueError:
+            vram_bytes = 0
+        if name:
+            return GPUInfo(detected=True, name=name, vram_bytes=vram_bytes, source="nvidia-smi", vendor="nvidia")
+    return GPUInfo(detected=False, source="nvidia-smi")
 
 
 def parse_rocm_version(hipconfig_output: str) -> str:
@@ -179,6 +236,20 @@ def detect_gpu() -> GPUInfo:
             )
             if result.returncode == 0 and result.stdout.strip():
                 info = parse_rocm_smi_json(result.stdout)
+                if info.detected:
+                    return info
+        except Exception:
+            pass
+
+    nvidia_smi = shutil.which("nvidia-smi")
+    if nvidia_smi:
+        try:
+            result = subprocess.run(
+                [nvidia_smi, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                info = parse_nvidia_smi_csv(result.stdout)
                 if info.detected:
                     return info
         except Exception:
@@ -368,12 +439,23 @@ def detect_gpu_and_rocm_via_torch(comfyui_install_dir: str | Path) -> tuple[GPUI
     except Exception:
         data = {}
     if data.get("available"):
+        hip_version = str(data.get("hip_version") or "")
+        name = str(data.get("name", ""))
         gpu = GPUInfo(
-            detected=True, name=str(data.get("name", "")),
+            detected=True, name=name,
             vram_bytes=int(data.get("vram_bytes", 0) or 0), source="torch",
+            vendor=_guess_gpu_vendor(name, hip_version=hip_version),
         )
+        # torch.version.hip is only set for a ROCm PyTorch build - an NVIDIA/
+        # CUDA build reports it as None/empty even though torch.cuda.*
+        # works identically for both backends (see Kandidat 1, task #577:
+        # INSTALL_LOCAL_AI.bat now installs CUDA wheels for NVIDIA GPUs).
+        # ROCmInfo.installed here really means "PyTorch GPU acceleration is
+        # available" regardless of which backend - check_environment()
+        # picks the vendor-appropriate wording for the user-facing warning.
         rocm = ROCmInfo(
-            installed=True, version=str(data.get("hip_version") or "unbekannt"),
+            installed=True,
+            version=hip_version if gpu.vendor == "amd" else "CUDA",
             path=str(venv_python),
         )
         return gpu, rocm
@@ -397,13 +479,48 @@ def check_environment(
 
     warnings: list[str] = []
     if not gpu.detected:
-        warnings.append("Keine AMD-GPU erkannt. Lokale Generierung wird nicht funktionieren.")
-    elif gpu.vram_bytes and gpu.vram_gb < MIN_VRAM_GB_RECOMMENDED:
+        # Kandidat 1 (task #577): NVIDIA (CUDA) is now supported alongside
+        # AMD (ROCm) - this used to unconditionally say "Keine AMD-GPU
+        # erkannt", which was actively misleading on an NVIDIA machine.
         warnings.append(
-            f"Nur {gpu.vram_gb} GB VRAM erkannt - Wan2.2 5B empfiehlt mind. {MIN_VRAM_GB_RECOMMENDED} GB."
+            "Keine unterstützte GPU (AMD oder NVIDIA) erkannt. Lokale Generierung wird nicht funktionieren."
         )
+    elif gpu.vram_bytes and gpu.vram_gb < MIN_VRAM_GB_RECOMMENDED:
+        if gpu.source == "wmi":
+            # detect_gpu()'s WMI fallback (Win32_VideoController.AdapterRAM)
+            # is a known-unreliable source for this specific number: it's a
+            # 32-bit field and silently misreports any GPU with more than
+            # ~4 GB VRAM as exactly 4.0 GB (see
+            # detect_gpu_and_rocm_via_torch()'s docstring for the concrete
+            # live-test case, RX 7600 XT reported as 4.0 GB instead of the
+            # real 16 GB). This WMI path only runs BEFORE ComfyUI/PyTorch is
+            # installed (check_environment() prefers the accurate torch-based
+            # reading whenever that venv already exists) - i.e. exactly when
+            # a first-time user is most likely to see this message and be
+            # scared off by a number that may well be wrong. Soften the
+            # wording instead of stating it as fact.
+            warnings.append(
+                f"Nur {gpu.vram_gb} GB VRAM gemeldet (Windows-Systemabfrage vor der Installation - "
+                "dieser Wert ist bei manchen GPUs mit mehr als 4 GB VRAM bekanntermaßen ungenau und "
+                "kann zu niedrig sein). Nach der ComfyUI-Installation zeigt „Jetzt prüfen“ den "
+                "tatsächlichen Wert an."
+            )
+        else:
+            warnings.append(
+                f"Nur {gpu.vram_gb} GB VRAM erkannt - Wan2.2 5B empfiehlt mind. {MIN_VRAM_GB_RECOMMENDED} GB."
+            )
     if not rocm.installed:
-        warnings.append("ROCm wurde nicht gefunden. Bitte über INSTALL_LOCAL_AI.bat einrichten.")
+        # Kandidat 1 (task #577): vendor-appropriate wording instead of
+        # always naming ROCm, which is meaningless/confusing on an NVIDIA
+        # machine (INSTALL_LOCAL_AI.bat installs CUDA-PyTorch there instead).
+        if gpu.vendor == "nvidia":
+            warnings.append("CUDA-PyTorch wurde nicht gefunden. Bitte über INSTALL_LOCAL_AI.bat einrichten.")
+        elif gpu.vendor == "amd":
+            warnings.append("ROCm wurde nicht gefunden. Bitte über INSTALL_LOCAL_AI.bat einrichten.")
+        else:
+            warnings.append(
+                "GPU-Beschleunigung (ROCm/CUDA) wurde nicht gefunden. Bitte über INSTALL_LOCAL_AI.bat einrichten."
+            )
     if not comfyui.reachable:
         warnings.append(f"ComfyUI unter {comfyui_host}:{comfyui_port} nicht erreichbar.")
     missing = [m.name for m in models if not m.found]
