@@ -121,9 +121,31 @@ def relaunch_and_exit() -> None:
     """Startet die (nach einem Update/Rollback jetzt am Zielpfad liegende)
     .exe als neuen, unabhaengigen Prozess und beendet den aktuellen -
     fuer den optionalen "Jetzt neu starten"-Button im Update-Dialog. Nur
-    aufrufbar, wenn is_running_as_frozen_exe() True ist."""
+    aufrufbar, wenn is_running_as_frozen_exe() True ist.
+
+    WICHTIG (per Design von install_downloaded_update()): zum Zeitpunkt
+    dieses Aufrufs wurde die urspruengliche .exe-Datei des GERADE
+    LAUFENDEN Prozesses bereits auf ".exe.vorherige_version_backup"
+    umbenannt (Windows erlaubt das Umbenennen einer laufenden .exe, siehe
+    Kommentar dort). Ohne Gegenmassnahme wuerde subprocess.Popen() die
+    komplette aktuelle Prozessumgebung an die neue .exe vererben -
+    einschliesslich PyInstallers privater _PYI_*-Variablen. Der neue
+    Prozess wuerde sich dadurch faelschlich fuer einen "Worker-Subprozess
+    derselben Instanz" halten (PyInstaller-Onefile-Konvention: gleiche
+    Umgebung = gleiche laufende Instanz) und beim Start seine eingebaute
+    Sicherheitspruefung ausloesen ("Security validation failure: parent
+    process has different executable!", PyInstaller >= 6.22.1) - weil der
+    Pfad des Elternprozesses (jetzt der umbenannte Backup-Dateiname) nicht
+    mehr mit dem eigenen Pfad uebereinstimmt. Offizieller Mechanismus
+    dagegen: PYINSTALLER_RESET_ENVIRONMENT=1 setzen, das weist den
+    Bootloader an, alle privaten PyInstaller-Variablen zu verwerfen und
+    den neuen Prozess als eigenstaendige, neue Instanz zu behandeln (siehe
+    PyInstaller-Doku, Abschnitt "Environment Variables Used by Frozen
+    Applications"). Siehe auch Windows_Testprotokoll.md."""
     import subprocess
 
     exe_path = current_exe_path()
-    subprocess.Popen([str(exe_path)], cwd=str(exe_path.parent))
+    env = os.environ.copy()
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    subprocess.Popen([str(exe_path)], cwd=str(exe_path.parent), env=env)
     sys.exit(0)
