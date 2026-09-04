@@ -7,6 +7,7 @@ later phases and simply appear as additional tabs.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
@@ -49,7 +50,22 @@ from voxini_studio.ui.update_dialog import UpdateDialog
 # predictable place instead of wherever an OS folder-picker happened to be
 # pointed at (that ambiguity is exactly how earlier projects ended up
 # misplaced inside tests/).
-_APP_ROOT = Path(__file__).resolve().parent.parent.parent
+#
+# In the built .exe (PyInstaller onefile), __file__ points INSIDE the
+# temporary extraction folder (sys._MEIPASS, e.g. "...\AppData\Local\Temp\
+# _MEIxxxxx\voxini_studio\ui\main_window.py") - that folder is recreated on
+# every start and deleted on exit, so resolving _APP_ROOT from __file__
+# there would silently create/open "Projekte" inside a folder that
+# disappears again, causing "Projekt öffnen..." to point at the wrong,
+# throwaway location. sys.executable (same pattern as
+# core/app_update.py:current_exe_path()) always points at the real,
+# persistent .exe location instead, both in the frozen build and - via the
+# is_running_as_frozen_exe() check - falls back to the __file__-based
+# calculation in the Python dev environment (where sys.frozen is unset).
+if getattr(sys, "frozen", False):
+    _APP_ROOT = Path(sys.executable).resolve().parent
+else:
+    _APP_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _projects_root() -> Path:

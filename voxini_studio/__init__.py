@@ -2,4 +2,4 @@
 fuer Musikvideos: ComfyUI/ROCm/Wan2.2 (lokal, kostenlos) + Runway
 (Cloud, optional, kostenpflichtig)."""
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
