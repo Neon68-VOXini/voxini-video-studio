@@ -5,8 +5,13 @@
 comfyui_env/
 
 # ComfyUI/Wan2.2-Modelldateien (mehrere GB, werden ueber den
-# Einrichtungsassistenten separat heruntergeladen - siehe core/model_downloader.py)
-models/
+# Einrichtungsassistenten separat heruntergeladen - siehe core/model_downloader.py).
+# Mit fuehrendem "/" ausschliesslich an der Projektwurzel - OHNE das "/" wuerde
+# dieses Muster auch "voxini_studio/models/" treffen, das eigentliche
+# Python-Quellcode-Paket (project.py, parsing.py) - genau das ist beim ersten
+# Push passiert und hat die gebaute EXE mit ModuleNotFoundError zum Absturz
+# gebracht.
+/models/
 
 # Nutzer-Projekte (persoenliche/kreative Inhalte, gehoeren NICHT in ein
 # oeffentliches Repo)
