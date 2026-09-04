@@ -1,0 +1,99 @@
+{
+  "_comment": "Stage 1 of the 'freie Szene, nur Gesicht uebernehmen' local pipeline: SDXL + InstantID (cubiq/ComfyUI_InstantID) generates a brand-new scene image from {{PROMPT}}, using the character reference photo ({{IMAGE_FILENAME}}, already uploaded via ComfyUIProvider.upload_image) ONLY for facial identity via ApplyInstantID's InstantID conditioning + ControlNet - the reference photo's background/composition/pose is NOT reused, unlike the plain image-to-video path (wan22_image_to_video.json), which locks the whole first frame to the reference photo. The resulting image (stage 1 output) is then fed as the start_image into the EXISTING, unchanged Wan2.2 image-to-video workflow (stage 2) - see ComfyUIProvider._generate() / _generate_identity_scene_image(). Requires the ComfyUI_InstantID custom node (installable via ComfyUI Manager) plus its three model files: models/instantid/ip-adapter.bin, models/controlnet/instantid/diffusion_pytorch_model.safetensors, models/insightface/models/antelopev2/*, and an SDXL checkpoint in models/checkpoints/ (filename set by {{CHECKPOINT_NAME}}, project setting Project.comfyui_identity_checkpoint). None of this is bundled with VOXini - the user downloads it once, all free/open weights. This template's exact node graph has NOT been run against a live ComfyUI instance in this environment (no ComfyUI available here) - it was hand-built to match cubiq/ComfyUI_InstantID's official example workflow (examples/InstantID_basic.json) node-for-node, but it needs a real live test on the user's machine before being trusted, same honesty caveat as any other change made without a running app to verify against.",
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "{{CHECKPOINT_NAME}}"
+    }
+  },
+  "2": {
+    "class_type": "InstantIDModelLoader",
+    "inputs": {
+      "instantid_file": "ip-adapter.bin"
+    }
+  },
+  "3": {
+    "class_type": "InstantIDFaceAnalysis",
+    "inputs": {
+      "provider": "CPU"
+    }
+  },
+  "4": {
+    "class_type": "ControlNetLoader",
+    "inputs": {
+      "control_net_name": "instantid\\diffusion_pytorch_model.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{{IMAGE_FILENAME}}"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{PROMPT}}",
+      "clip": ["1", 1]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{NEGATIVE_PROMPT}}",
+      "clip": ["1", 1]
+    }
+  },
+  "8": {
+    "class_type": "ApplyInstantID",
+    "inputs": {
+      "weight": 1.0,
+      "start_at": 0,
+      "end_at": 1,
+      "instantid": ["2", 0],
+      "insightface": ["3", 0],
+      "control_net": ["4", 0],
+      "image": ["5", 0],
+      "model": ["1", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0]
+    }
+  },
+  "9": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": "{{WIDTH}}",
+      "height": "{{HEIGHT}}",
+      "batch_size": 1
+    }
+  },
+  "10": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": "{{SEED}}",
+      "steps": 30,
+      "cfg": 4.5,
+      "sampler_name": "ddpm",
+      "scheduler": "karras",
+      "denoise": 1,
+      "model": ["8", 0],
+      "positive": ["8", 1],
+      "negative": ["8", 2],
+      "latent_image": ["9", 0]
+    }
+  },
+  "11": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["10", 0],
+      "vae": ["1", 2]
+    }
+  },
+  "12": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "{{FILENAME_PREFIX}}",
+      "images": ["11", 0]
+    }
+  }
+}

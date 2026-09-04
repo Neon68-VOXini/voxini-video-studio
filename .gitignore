@@ -1,0 +1,32 @@
+# Python-Umgebungen (werden lokal per BUILD_WINDOWS.bat / INSTALL_LOCAL_AI.bat /
+# requirements-lyrics.txt neu angelegt, gehoeren nicht ins Repo)
+.venv/
+.venv-lyrics/
+comfyui_env/
+
+# ComfyUI/Wan2.2-Modelldateien (mehrere GB, werden ueber den
+# Einrichtungsassistenten separat heruntergeladen - siehe core/model_downloader.py)
+models/
+
+# Nutzer-Projekte (persoenliche/kreative Inhalte, gehoeren NICHT in ein
+# oeffentliches Repo)
+Projekte/
+
+# Laufzeit-Protokolle
+logs/
+
+# Gebaute Anwendung + Update-Mechanik-Nebendateien
+VOXini Video Studio.exe
+*.exe.vorherige_version_backup
+*.update_download
+*.part
+build/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+
+# Betriebssystem
+.DS_Store
+Thumbs.db

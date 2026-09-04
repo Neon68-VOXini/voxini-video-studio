@@ -1,0 +1,37 @@
+# Requirements NUR fuer das isolierte Environment ".venv-lyrics"
+# (siehe voxini_studio/core/lyrics_align_env.py), NICHT fuer das
+# Haupt-Environment (.venv)!
+#
+# Hintergrund: Das Songtext-zu-SRT-Feature (automatischer Zeitabgleich eines
+# eingetippten Songtexts mit der Audiodatei) braucht zwei schwere,
+# eigenstaendige ML-Bibliotheken:
+#   - audio-separator (Vocal-Isolation vor der Spracherkennung, gleiches
+#     Modell/Vorgehen wie der Lead-/Backing-Vocal-Split im Schwesterprojekt
+#     VOXini Studio) - verlangt laut eigenem pyproject.toml numpy>=2,
+#     torch>=2.3, onnxruntime>=1.17.
+#   - faster-whisper (Spracherkennung mit Wort-Zeitstempeln) - nutzt
+#     ctranslate2 als CPU-Backend, kein torch noetig.
+#
+# Anders als im Schwesterprojekt VOXini Studio gibt es in DIESEM Projekt
+# (requirements.txt) keinen numpy<2-Pin (kein Demucs hier), daher waere ein
+# gemeinsames Environment technisch denkbar. Trotzdem bewusst als eigenes,
+# erst bei Bedarf angelegtes Environment umgesetzt (gleiches Muster wie
+# ".venv-vocalsplit"), damit die schlanke Haupt-App (PySide6 + ffmpeg) nicht
+# mit mehreren hundert MB bis GB an ML-Abhaengigkeiten belastet wird, wenn
+# das Feature nie genutzt wird.
+#
+# WICHTIG - Python-Version: ".venv-lyrics" wird bewusst NICHT mit dem
+# gleichen Python-Interpreter wie die Haupt-App angelegt, sondern gezielt
+# mit Python 3.12, 3.11 oder 3.10 (siehe lyrics_align_env.py,
+# COMPATIBLE_PYTHON_VERSIONS/_find_compatible_python). Grund: einzelne
+# Abhaengigkeiten (z.B. "diffq-fixed", eine Abhaengigkeit von
+# audio-separator) stellen fuer neuere Python-Versionen (aktuell z.B. 3.14)
+# noch keine fertigen Installationsdateien bereit, und deren
+# Quellcode-Fallback ist nachweislich kaputt (fehlende .pyx-Datei im
+# Quellpaket auf PyPI).
+audio-separator[cpu]==0.44.5
+audioread
+faster-whisper==1.1.1
+rapidfuzz==3.14.1
+scipy
+srt>=3.5

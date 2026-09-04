@@ -1,0 +1,94 @@
+name: VOXini Video Studio Release
+
+# Ausloeser: ein Versions-Tag wie "v1.1.0" wird gepusht - danach laeuft der
+# komplette Build/Release automatisch, kein manueller Schritt mehr noetig
+# (siehe scripts/check_version_consistency.py, core/update_check.py).
+#
+# Zusaetzlich per Hand ausloesbar (workflow_dispatch) fuer Testlaeufe ohne
+# echten Tag: baut dieselbe .exe, laedt sie aber nur als privates, nur fuer
+# Projektmitglieder sichtbares Actions-Artefakt hoch (actions/upload-
+# artifact@v4), OHNE ein oeffentliches GitHub-Release anzulegen. Ein
+# oeffentliches Release entsteht ausschliesslich durch einen echten
+# Tag-Push (on.push.tags).
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # noetig, um ein GitHub Release + Datei-Anhang zu erstellen
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Quellcode auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Versions-Konsistenz pruefen
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            python scripts/check_version_consistency.py "$TAG"
+          else
+            python scripts/check_version_consistency.py
+          fi
+
+      - name: Build-Abhaengigkeiten installieren
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Python-Syntaxpruefung (schnelles Sicherheitsnetz)
+        shell: bash
+        run: |
+          python -m py_compile voxini_studio/main.py
+          python -m py_compile voxini_studio/core/update_check.py voxini_studio/core/app_update.py
+          python -m py_compile voxini_studio/ui/update_dialog.py
+
+      - name: EXE bauen (PyInstaller Onefile, siehe voxini_studio.spec / BUILD_WINDOWS.bat)
+        shell: bash
+        run: |
+          rm -rf build dist
+          rm -f "VOXini Video Studio.exe"
+          python -m PyInstaller --noconfirm --distpath "." --workpath "build" voxini_studio.spec
+          test -f "VOXini Video Studio.exe"
+
+      - name: Version fuer Release-Metadaten ermitteln
+        shell: bash
+        run: |
+          VERSION=$(python -c "from voxini_studio import __version__; print(__version__)")
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: GitHub Release erstellen und EXE anhaengen (nur bei echtem Versions-Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "VOXini Video Studio.exe"
+          name: "VOXini Video Studio ${{ env.VERSION }}"
+          body: |
+            Automatisch erzeugtes Release. Enthaelt die fertig gebaute
+            "VOXini Video Studio.exe" - eine einzelne, eigenstaendige Datei,
+            keine separate Installation noetig. ComfyUI/ROCm/Wan2.2 und
+            Modelldateien sind NICHT enthalten und werden separat ueber
+            INSTALL_LOCAL_AI.bat bzw. den Einrichtungsassistenten
+            eingerichtet.
+          draft: false
+          prerelease: false
+
+      - name: Build-Artefakt hochladen (nur bei manuellem Testlauf, kein oeffentliches Release)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: "VOXini Video Studio ${{ env.VERSION }}"
+          path: "VOXini Video Studio.exe"
+          retention-days: 14

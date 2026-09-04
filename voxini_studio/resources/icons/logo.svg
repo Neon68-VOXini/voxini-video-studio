@@ -1,0 +1,10 @@
+<svg width="240" height="48" viewBox="0 0 240 48" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="voxiniGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff34c8"/>
+      <stop offset="50%" stop-color="#9c4cff"/>
+      <stop offset="100%" stop-color="#24d9ff"/>
+    </linearGradient>
+  </defs>
+  <text x="2" y="35" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="url(#voxiniGrad)">VOXini</text>
+</svg>

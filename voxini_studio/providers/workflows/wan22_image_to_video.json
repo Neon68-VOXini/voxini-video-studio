@@ -1,0 +1,105 @@
+{
+  "_comment": "Wan2.2 TI2V 5B image-to-video ComfyUI API-format workflow. Same graph as wan22_text_to_video.json plus the LoadImage node (56) feeding Wan22ImageToVideoLatent.start_image - exactly the 'Ctrl+B to enable' group described in the official template at github.com/Comfy-Org/workflow_templates/blob/main/templates/video_wan2_2_5B_ti2v.json. {{IMAGE_FILENAME}} must be a filename already present on the ComfyUI server (ComfyUIProvider.upload_image uploads the character reference image via POST /upload/image first and substitutes the returned server-side filename here).",
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": "{{SEED}}",
+      "steps": 20,
+      "cfg": 5,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": ["48", 0],
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "latent_image": ["55", 0]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{PROMPT}}",
+      "clip": ["38", 0]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{{NEGATIVE_PROMPT}}",
+      "clip": ["38", 0]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecodeTiled",
+    "_comment": "Explicit tiled decode (not the default VAEDecode) - ComfyUI's own automatic OOM-retry-with-tiling fallback still uses tile sizes too large for 16GB cards on a multi-second Wan2.2 clip (observed: retry itself OOM'd trying to allocate 18.56 GiB). Small, fixed tile/temporal sizes keep VAE decode VRAM use bounded regardless of card size, at a small quality/time cost.",
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["39", 0],
+      "tile_size": 256,
+      "overlap": 32,
+      "temporal_size": 16,
+      "temporal_overlap": 4
+    }
+  },
+  "37": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_ti2v_5B_fp16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "38": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "39": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan2.2_vae.safetensors"
+    }
+  },
+  "48": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "shift": 8,
+      "model": ["37", 0]
+    }
+  },
+  "55": {
+    "class_type": "Wan22ImageToVideoLatent",
+    "inputs": {
+      "width": "{{WIDTH}}",
+      "height": "{{HEIGHT}}",
+      "length": "{{FRAMES}}",
+      "batch_size": 1,
+      "vae": ["39", 0],
+      "start_image": ["56", 0]
+    }
+  },
+  "56": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{{IMAGE_FILENAME}}"
+    }
+  },
+  "57": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": "{{FPS}}",
+      "images": ["8", 0]
+    }
+  },
+  "58": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "{{FILENAME_PREFIX}}",
+      "format": "auto",
+      "codec": "auto",
+      "video": ["57", 0]
+    }
+  }
+}

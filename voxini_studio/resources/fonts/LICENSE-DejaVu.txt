@@ -1,0 +1,11 @@
+DejaVu Fonts License
+
+Fonts are (c) Bitstream (see below). DejaVu changes are in public domain.
+Explanation of copyright is on the following page:
+http://dejavu.sourceforge.net/wiki/index.php/License
+
+In short: the DejaVu fonts are a free, open, permissively licensed font
+family derived from the Bitstream Vera Fonts, redistributable without
+restriction (including commercial/bundled use), which is why they are
+bundled here as the built-in title-card font so VOXini Video Studio never
+depends on a font being pre-installed on the user's system.
