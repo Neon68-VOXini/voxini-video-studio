@@ -5,9 +5,10 @@ title VOXini Video Studio - Windows-Build erstellen
 
 echo ============================================================
 echo  VOXini Video Studio - BUILD_WINDOWS.bat
-echo  Erstellt EINE einzelne, eigenstaendige "VOXini Video Studio.exe"
-echo  direkt in diesem Ordner (PyInstaller-Onefile-Build, kein
-echo  separater dist-Ordner, keine separate Portable-Version/ZIP).
+echo  Erstellt den Anwendungsordner "VOXini Video Studio\" direkt in
+echo  diesem Ordner (PyInstaller-Onedir-Build, seit Version 1.1.0 -
+echo  vorher Onefile). Der komplette Ordner (.exe + _internal\) ist
+echo  die Anwendung und muss immer zusammen bleiben/verschoben werden.
 echo  ComfyUI/ROCm/Wan2.2 bleiben eine getrennte, separat installierte
 echo  Umgebung, siehe INSTALL_LOCAL_AI.bat.
 echo ============================================================
@@ -15,7 +16,8 @@ echo.
 
 cd /d "%~dp0"
 set "VENV_DIR=%~dp0.venv"
-set "OUTPUT_EXE=%~dp0VOXini Video Studio.exe"
+set "OUTPUT_DIR=%~dp0VOXini Video Studio"
+set "OUTPUT_EXE=%OUTPUT_DIR%\VOXini Video Studio.exe"
 
 where py >nul 2>nul
 if errorlevel 1 (
@@ -49,16 +51,15 @@ if errorlevel 1 (
 )
 
 echo.
-echo Entferne alten Build-Zwischenordner (build\) ...
+echo Entferne alten Build-Zwischenordner (build\) und alten Anwendungsordner ...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
-if exist "%OUTPUT_EXE%" del /f /q "%OUTPUT_EXE%"
+if exist "%OUTPUT_DIR%" rmdir /s /q "%OUTPUT_DIR%"
 
 echo.
-echo Baue mit PyInstaller (voxini_studio.spec, Onefile-Modus) ...
-echo Das kann - da eine einzelne, vollstaendig eingebettete EXE
-echo entsteht (inkl. Python, Qt und einem gebuendelten ffmpeg/ffprobe) -
-echo einige Minuten dauern.
+echo Baue mit PyInstaller (voxini_studio.spec, Onedir-Modus) ...
+echo Das kann - da Python, Qt und ein gebuendeltes ffmpeg/ffprobe
+echo eingebettet werden - einige Minuten dauern.
 echo ============================================================
 "%VENV_PY%" -m PyInstaller --noconfirm --distpath "%CD%" --workpath "%CD%\build" "%CD%\voxini_studio.spec"
 set "EXITCODE=%ERRORLEVEL%"
@@ -80,20 +81,23 @@ if not exist "%OUTPUT_EXE%" (
 echo.
 echo ============================================================
 echo  Build erfolgreich.
-echo  Einzelne startbare Datei liegt direkt hier:
+echo  Startbare Anwendung liegt direkt hier:
 echo    %OUTPUT_EXE%
 echo.
-echo  Es gibt keine separate "Portable"-Version und keine ZIP-Datei -
-echo  diese eine .exe ist bereits die vollstaendige Anwendung
-echo  (Python, Qt, Icons, Workflow-Vorlagen und ein gebuendeltes
-echo  ffmpeg/ffprobe sind direkt eingebettet).
+echo  WICHTIG: Der GESAMTE Ordner "VOXini Video Studio\" (inkl. des
+echo  Unterordners "_internal\") gehoert zusammen und muss immer als
+echo  Einheit verschoben/kopiert/weitergegeben werden - nicht nur die
+echo  .exe-Datei allein. Grund fuer den Wechsel von Onefile auf Onedir:
+echo  Onefile hat sich bei jedem Start neu in einen temporaeren Ordner
+echo  entpackt, wobei Antivirus-Software das Programm gelegentlich am
+echo  Start hindern konnte ("Security validation failure"). Onedir
+echo  entpackt sich nicht mehr bei jedem Start, das Problem entfaellt.
 echo.
-echo  WICHTIG: ComfyUI/ROCm/Wan2.2 sind NICHT in dieser EXE
+echo  WICHTIG: ComfyUI/ROCm/Wan2.2 sind NICHT in dieser Anwendung
 echo  enthalten und muessen separat ueber INSTALL_LOCAL_AI.bat
-echo  eingerichtet werden. Modelldateien werden nie in die EXE
-echo  eingebaut, sondern beim ersten Start ueber den
-echo  Einrichtungsassistenten an einen frei waehlbaren Ort
-echo  heruntergeladen.
+echo  eingerichtet werden. Modelldateien werden nie eingebaut, sondern
+echo  beim ersten Start ueber den Einrichtungsassistenten an einen frei
+echo  waehlbaren Ort heruntergeladen.
 echo ============================================================
 pause
 exit /b 0

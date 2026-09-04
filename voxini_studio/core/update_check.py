@@ -18,7 +18,10 @@ from voxini_studio import __version__
 GITHUB_OWNER = "Neon68-VOXini"
 GITHUB_REPO = "voxini-video-studio"
 _RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
-_ASSET_NAME = "VOXini Video Studio.exe"
+# Seit Version 1.1.0 (Onedir-Build statt Onefile, siehe app_update.py) ist
+# das Release-Asset ein ZIP-Archiv des kompletten Anwendungsordners, keine
+# einzelne .exe-Datei mehr.
+_ASSET_NAME = "VOXini Video Studio.zip"
 
 
 class UpdateCheckError(RuntimeError):
@@ -100,9 +103,9 @@ def check_for_update_verbose(timeout: float = 10.0) -> Optional[UpdateInfo]:
 
     asset = next((a for a in assets if a.get("name") == _ASSET_NAME), None)
     if asset is None:
-        asset = next((a for a in assets if str(a.get("name", "")).lower().endswith(".exe")), None)
+        asset = next((a for a in assets if str(a.get("name", "")).lower().endswith(".zip")), None)
     if asset is None:
-        raise UpdateCheckError(f"Release '{tag}' enthält keine .exe-Datei zum Herunterladen.")
+        raise UpdateCheckError(f"Release '{tag}' enthält keine .zip-Datei zum Herunterladen.")
 
     info = UpdateInfo(
         current_version=__version__,

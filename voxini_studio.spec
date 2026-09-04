@@ -1,21 +1,40 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller build spec for VOXini Video Studio 1.0 - a single,
-self-contained Windows .exe (PyInstaller "onefile" mode). Run via
-BUILD_WINDOWS.bat - do not run pyinstaller directly against this file
+"""PyInstaller build spec for VOXini Video Studio 1.0 - a self-contained
+Windows application folder (PyInstaller "onedir" mode, since v1.1.0). Run
+via BUILD_WINDOWS.bat - do not run pyinstaller directly against this file
 without first activating the app's own (not ComfyUI's!) Python venv, since
 PyInstaller bundles whatever environment it's invoked from.
 
-Onefile mode (EXE receives a.binaries/a.zipfiles/a.datas directly, with
-exclude_binaries=False, and there is deliberately no COLLECT step) produces
-ONE executable file with everything embedded - no separate `dist\VOXini
-Video Studio\` folder, no `_internal` subfolder, no separate "portable"
-zip/folder distribution. BUILD_WINDOWS.bat points --distpath directly at
-the project root, so the result lands at exactly:
+WARUM ONEDIR STATT ONEFILE (Wechsel in v1.1.0): im vorherigen Onefile-Modus
+entpackte sich die .exe bei JEDEM Start neu in einen temporaeren Ordner
+(zwei interne Prozesse: der aeussere Bootloader-Prozess extrahiert, startet
+den eigentlichen App-Prozess als Kind und prueft dabei per eingebauter
+PyInstaller-Sicherheitsfunktion, dass der Pfad des Elternprozesses zur
+eigenen .exe passt). Wurde die frisch entpackte Datei just in diesem
+Moment von einem Antivirus-Programm gescannt/kurz gesperrt, schlug diese
+Pruefung gelegentlich fehl - auch bei ganz normalem Doppelklick-Start, ohne
+jeden Zusammenhang mit dem Auto-Update ("Security validation failure:
+parent process has different executable!", siehe app_update.py und
+Windows_Testprotokoll.md). Onedir-Builds entpacken sich nicht bei jedem
+Start neu, das Problem entfaellt strukturell.
 
-    VOXini Video Studio.exe   (in this project's own root folder)
+Onedir mode (EXE receives exclude_binaries=True, a.binaries/a.zipfiles/
+a.datas go to a separate COLLECT step) produces an application FOLDER
+containing the .exe plus an `_internal` subfolder with all bundled
+dependencies - no more single-file distribution. BUILD_WINDOWS.bat points
+--distpath directly at the project root, so the result lands at exactly:
 
-Bundles as data files (all reliably embedded and extracted at runtime to
-the onefile temp dir, sys._MEIPASS):
+    VOXini Video Studio\VOXini Video Studio.exe   (inside a folder of the
+                                                     same name, alongside
+                                                     `_internal\`)
+
+The whole `VOXini Video Studio\` folder must be kept together (moved/
+zipped/distributed as one unit) - see app_update.py for how the in-app
+auto-updater now swaps this entire folder instead of a single file.
+
+Bundles as data files (all reliably embedded and, at runtime, resolved via
+sys._MEIPASS - in onedir mode this simply points at the app folder itself/
+its `_internal` subfolder, no temp-dir extraction happens):
   - voxini_studio/resources/icons  (SVG icons + logo)
   - voxini_studio/resources/fonts  (bundled DejaVu Sans Bold, used for
     title cards so ffmpeg's drawtext filter never depends on a font being
@@ -66,11 +85,8 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
-    exclude_binaries=False,
+    exclude_binaries=True,
     name="VOXini Video Studio",
     debug=False,
     bootloader_ignore_signals=False,
@@ -83,4 +99,14 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    name="VOXini Video Studio",
 )

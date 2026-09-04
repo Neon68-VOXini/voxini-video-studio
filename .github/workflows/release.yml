@@ -55,13 +55,13 @@ jobs:
           python -m py_compile voxini_studio/core/update_check.py voxini_studio/core/app_update.py
           python -m py_compile voxini_studio/ui/update_dialog.py
 
-      - name: EXE bauen (PyInstaller Onefile, siehe voxini_studio.spec / BUILD_WINDOWS.bat)
+      - name: Anwendungsordner bauen (PyInstaller Onedir, siehe voxini_studio.spec / BUILD_WINDOWS.bat)
         shell: bash
         run: |
           rm -rf build dist
-          rm -f "VOXini Video Studio.exe"
+          rm -rf "VOXini Video Studio"
           python -m PyInstaller --noconfirm --distpath "." --workpath "build" voxini_studio.spec
-          test -f "VOXini Video Studio.exe"
+          test -f "VOXini Video Studio/VOXini Video Studio.exe"
 
       - name: Version fuer Release-Metadaten ermitteln
         shell: bash
@@ -69,19 +69,29 @@ jobs:
           VERSION=$(python -c "from voxini_studio import __version__; print(__version__)")
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      - name: GitHub Release erstellen und EXE anhaengen (nur bei echtem Versions-Tag)
+      - name: Release-ZIP packen (Ordnerinhalt direkt im Archiv, kein Wrapper-Ordner)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "VOXini Video Studio\*" -DestinationPath "VOXini Video Studio.zip" -Force
+
+      - name: GitHub Release erstellen und ZIP anhaengen (nur bei echtem Versions-Tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: "VOXini Video Studio.exe"
+          files: "VOXini Video Studio.zip"
           name: "VOXini Video Studio ${{ env.VERSION }}"
           body: |
             Automatisch erzeugtes Release. Enthaelt die fertig gebaute
-            "VOXini Video Studio.exe" - eine einzelne, eigenstaendige Datei,
-            keine separate Installation noetig. ComfyUI/ROCm/Wan2.2 und
-            Modelldateien sind NICHT enthalten und werden separat ueber
-            INSTALL_LOCAL_AI.bat bzw. den Einrichtungsassistenten
-            eingerichtet.
+            Anwendung als ZIP-Archiv - bitte VOLLSTAENDIG in einen
+            beliebigen Ordner entpacken (die .exe UND den Unterordner
+            "_internal" zusammen, nicht nur die .exe allein) und von dort
+            starten. Seit Version 1.1.0 ein Onedir-Build (vorher Onefile) -
+            Grund: das Onefile-Selbst-Entpacken bei jedem Start konnte in
+            seltenen Faellen mit Antivirus-Scans kollidieren
+            ("Security validation failure"), Onedir vermeidet das
+            strukturell. ComfyUI/ROCm/Wan2.2 und Modelldateien sind NICHT
+            enthalten und werden separat ueber INSTALL_LOCAL_AI.bat bzw.
+            den Einrichtungsassistenten eingerichtet.
           draft: false
           prerelease: false
 
@@ -90,5 +100,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: "VOXini Video Studio ${{ env.VERSION }}"
-          path: "VOXini Video Studio.exe"
+          path: "VOXini Video Studio.zip"
           retention-days: 14

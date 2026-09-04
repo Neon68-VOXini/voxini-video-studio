@@ -51,17 +51,18 @@ from voxini_studio.ui.update_dialog import UpdateDialog
 # pointed at (that ambiguity is exactly how earlier projects ended up
 # misplaced inside tests/).
 #
-# In the built .exe (PyInstaller onefile), __file__ points INSIDE the
-# temporary extraction folder (sys._MEIPASS, e.g. "...\AppData\Local\Temp\
-# _MEIxxxxx\voxini_studio\ui\main_window.py") - that folder is recreated on
-# every start and deleted on exit, so resolving _APP_ROOT from __file__
-# there would silently create/open "Projekte" inside a folder that
-# disappears again, causing "Projekt öffnen..." to point at the wrong,
-# throwaway location. sys.executable (same pattern as
-# core/app_update.py:current_exe_path()) always points at the real,
-# persistent .exe location instead, both in the frozen build and - via the
-# is_running_as_frozen_exe() check - falls back to the __file__-based
-# calculation in the Python dev environment (where sys.frozen is unset).
+# In der gebauten Anwendung (PyInstaller-Onedir seit v1.1.0, vorher
+# Onefile) zeigt __file__ auf sys._MEIPASS - im aktuellen Onedir-Build ist
+# das der "_internal"-Unterordner der eigentlichen Installation (also
+# unproblematisch), im frueheren Onefile-Build war das dagegen ein bei
+# jedem Start neu angelegter und beim Beenden wieder geloeschter
+# temporaerer Ordner, wodurch _APP_ROOT dort auf einen verschwindenden Pfad
+# gezeigt haette. sys.executable (gleiches Prinzip wie
+# core/app_update.py:current_exe_path()) zeigt in beiden Modi zuverlaessig
+# auf den echten, dauerhaften Installationsordner und wird deshalb hier
+# weiterhin bevorzugt - via is_running_as_frozen_exe() faellt der Code im
+# Python-Entwicklungsbetrieb (sys.frozen nicht gesetzt) auf die
+# __file__-basierte Berechnung zurueck.
 if getattr(sys, "frozen", False):
     _APP_ROOT = Path(sys.executable).resolve().parent
 else:

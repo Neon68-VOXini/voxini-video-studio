@@ -1,4 +1,5 @@
-"""EIN Dialog fuer den gesamten Auto-Update-Ablauf von VOXini Video Studio:
+"""EIN Dialog fuer den gesamten Auto-Update-Ablauf von VOXini Video Studio
+(Onedir-Installationsordner seit Version 1.1.0, siehe app_update.py):
 zeigt aktuelle vs. neue Version + Änderungshinweise (Changelog aus den
 GitHub-Release-Notizen) an, startet Download+Installation erst nach
 expliziter Bestätigung ("Jetzt aktualisieren"), und bietet - unabhängig
@@ -68,7 +69,7 @@ class UpdateDialog(QDialog):
             layout.addWidget(changelog, 1)
 
             note = QLabel(
-                "Nach Bestätigung wird die neue Version heruntergeladen und die aktuelle .exe "
+                "Nach Bestätigung wird die neue Version heruntergeladen und die aktuelle Installation "
                 "automatisch ersetzt - die bisherige Version wird dabei als Sicherung aufbewahrt "
                 "und kann jederzeit über \"Auf vorherige Version zurückkehren\" wiederhergestellt werden. "
                 "Die Anwendung muss danach neu gestartet werden."
