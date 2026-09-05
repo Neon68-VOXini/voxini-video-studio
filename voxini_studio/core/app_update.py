@@ -34,6 +34,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Callable, Optional
@@ -82,6 +83,41 @@ def _staging_path_for(app_dir: Path) -> Path:
     return app_dir.with_name(app_dir.name + _STAGING_SUFFIX)
 
 
+def _release_cwd_lock_on(app_dir: Path) -> None:
+    """Verlaesst - falls noetig - das aktuelle Arbeitsverzeichnis (cwd) des
+    LAUFENDEN Prozesses, wenn es innerhalb von app_dir liegt, BEVOR
+    app_dir per os.rename()/shutil.rmtree() angefasst wird.
+
+    HINTERGRUND (Bugfix, urspruenglich falsche Annahme in diesem Modul):
+    Windows erlaubt zwar das Umbenennen eines Ordners, waehrend eine Datei
+    darin geoeffnet ist (der laufende Prozess haelt dafuer nur
+    Datei-Handles, keinen Namens-Lock) - das aktuelle Arbeitsverzeichnis
+    des Prozesses selbst ist aber ein SEPARATER, impliziter Lock auf genau
+    diesen Ordner. Wird eine .exe per Doppelklick gestartet (kein
+    Startmenue-Eintrag mit abweichendem "Ausfuehren in"-Pfad), ist ihr cwd
+    standardmaessig der eigene Installationsordner - dadurch schlaegt
+    os.rename(app_dir, ...) mit "WinError 32: der Prozess kann nicht auf
+    die Datei zugreifen, da sie von einem anderen Prozess verwendet wird"
+    fehl, obwohl aus Sicht des Docstrings oben eigentlich alles erlaubt
+    sein sollte. Der Fix: kurz vor dem Umbenennen/Loeschen in einen
+    neutralen Ordner (System-Temp) wechseln, der garantiert ausserhalb von
+    app_dir liegt - das gibt den cwd-Lock frei, ohne dass sich sonst etwas
+    am Prozess aendert (direkt danach folgt ohnehin nur noch Neustart/
+    Prozessende, siehe update_dialog.py)."""
+    try:
+        current = Path(os.getcwd())
+    except OSError:
+        # cwd bereits ungueltig (z.B. vorheriger Ordner existiert nicht
+        # mehr) - dann kann er auch keinen Lock mehr halten.
+        return
+    try:
+        is_inside = current == app_dir or app_dir in current.parents
+    except OSError:
+        is_inside = False
+    if is_inside:
+        os.chdir(tempfile.gettempdir())
+
+
 def download_update(
     download_url: str,
     progress_callback: Optional[Callable[[int, int], None]] = None,
@@ -125,13 +161,17 @@ def install_downloaded_update(downloaded_zip: Path) -> None:
          Versionshistorie).
       4. Staging-Ordner -> urspruenglicher Installationspfad umbenennen.
 
-    WICHTIG: Windows kann den Ordner einer laufenden .exe nicht loeschen,
-    aber SEHR WOHL umbenennen/verschieben (der laufende Prozess haelt
-    lediglich Datei-Handles, keinen Namens-Lock auf den Ordner) - genau das
+    WICHTIG: Windows kann den Ordner einer laufenden .exe umbenennen, auch
+    waehrend Dateien darin geoeffnet sind (der laufende Prozess haelt dafuer
+    nur Datei-Handles, keinen Namens-Lock auf den Ordner selbst) - genau das
     nutzt dieser Tausch aus, wie zuvor schon bei der Einzeldatei im
-    Onefile-Modus. Die Anwendung muss danach trotzdem neu gestartet werden,
-    damit der naechste Start tatsaechlich die neue Version ausfuehrt (siehe
-    update_dialog.py, Neustart-Angebot).
+    Onefile-Modus. ABER: das aktuelle Arbeitsverzeichnis (cwd) des Prozesses
+    ist ein SEPARATER Lock, der beim Doppelklick-Start standardmaessig
+    genau dieser Ordner ist - siehe _release_cwd_lock_on() oben, das
+    deshalb vor dem Umbenennen aufgerufen wird (Bugfix nach echtem
+    Fehlschlag "WinError 32" bei Version 1.2.0). Die Anwendung muss danach
+    trotzdem neu gestartet werden, damit der naechste Start tatsaechlich
+    die neue Version ausfuehrt (siehe update_dialog.py, Neustart-Angebot).
 
     Schlaegt Schritt 4 fehl, wird Schritt 3 sofort rueckgaengig gemacht,
     statt den Nutzer ohne startfaehige Installation dastehen zu lassen."""
@@ -156,6 +196,7 @@ def install_downloaded_update(downloaded_zip: Path) -> None:
             f"Heruntergeladenes Update ist ungültig: „{_EXE_NAME}“ fehlt im Archiv."
         )
 
+    _release_cwd_lock_on(app_dir)
     if backup.exists():
         shutil.rmtree(backup)
     os.rename(app_dir, backup)
@@ -187,6 +228,7 @@ def revert_to_previous_version() -> None:
     backup = backup_path_for(app_dir)
     if not backup.exists():
         raise UpdateInstallError("Keine vorherige Version zum Zurückkehren gefunden.")
+    _release_cwd_lock_on(app_dir)
     shutil.rmtree(app_dir)
     os.rename(backup, app_dir)
 
