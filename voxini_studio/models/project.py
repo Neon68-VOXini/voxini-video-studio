@@ -12,7 +12,7 @@ import datetime as _dt
 import uuid
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +38,26 @@ class SceneStatus(str, Enum):
     DONE = "done"                # clip generated and accepted
     FAILED = "failed"            # last generation attempt failed
     REJECTED = "rejected"        # user marked the result unusable, needs regen
+    NEEDS_REVIEW = "needs_review"
+    """Set by the (future, not-yet-implemented) automatic face-verification
+    check when a generated clip's face similarity to the character's
+    reference falls below the configured threshold - see
+    docs/Referenzbindung_Luecken_und_Plan.md, Punkt 7. A scene in this
+    status counts as neither DONE nor exportable: ffmpeg_assembly must
+    refuse to include it in the final export until Neon68 explicitly
+    re-accepts it (e.g. by re-running generate_scene() successfully, which
+    moves it to DONE). Distinct from FAILED (provider/network error) and
+    REJECTED (user's own manual judgement) - NEEDS_REVIEW is specifically
+    "the software itself is not confident this is the right face"."""
+
+
+# View angles a character can have a dedicated freigegeben reference photo
+# for - matches the "preferred_view_role" vocabulary used by the ChatGPT
+# scene-plan handoff (Szenenplan_VOXini_v4_FINAL_mit_Mikrotiming.json,
+# reference_requirements[].preferred_view_role), so imported scenes can
+# pick the angle that actually matches the camera direction instead of
+# always sending the same frontal photo regardless of shot type.
+CharacterViewRole = Literal["front", "three_quarter", "profile_left", "profile_right", "full_body"]
 
 
 class Character(BaseModel):
@@ -48,12 +68,52 @@ class Character(BaseModel):
     anything that must stay consistent). This text is injected verbatim
     into every scene prompt that references this character."""
     reference_image_paths: list[str] = Field(default_factory=list)
+    """The primary/default identity anchor photo(s) - used whenever a scene
+    does not specify a more specific view or wardrobe state below, and kept
+    for backward compatibility with projects created before views/
+    wardrobe_states existed."""
+
+    views: dict[str, str] = Field(default_factory=dict)
+    """Additional per-angle reference photos, keyed by CharacterViewRole
+    (e.g. "front", "profile_left"), so a scene whose camera direction calls
+    for a side profile doesn't have to reuse an unrelated frontal identity
+    photo. Empty by default - existing projects/characters keep working
+    unchanged via reference_image_paths alone. See resolve_reference_image()."""
+
+    wardrobe_states: dict[str, str] = Field(default_factory=dict)
+    """Per-outfit reference photos, keyed by a free-text wardrobe state name
+    the project defines for itself (e.g. "EMMA_WEDDING_INTERIOR",
+    "EMMA_RAIN_FINALE" - matches Scene.character_wardrobe_states below and
+    the wardrobe_states vocabulary in the ChatGPT scene-plan handoff).
+    Takes priority over views/reference_image_paths when a scene names a
+    wardrobe state for this character, since the correct outfit matters
+    more for continuity than the exact camera angle."""
 
     def prompt_block(self) -> str:
         """Text injected into a scene prompt to keep this character consistent."""
         if not self.description:
             return self.name
         return f"{self.name}: {self.description}"
+
+    def resolve_reference_image(
+        self, wardrobe_state: Optional[str] = None, view_role: Optional[str] = None
+    ) -> Optional[str]:
+        """Picks the single best reference photo for one scene appearance of
+        this character, in priority order: (1) the wardrobe state the scene
+        asked for, if this character actually has a photo for it, (2) the
+        camera-angle view the scene asked for, if available, (3) the
+        general/default identity anchor. Returns None only if the character
+        has no reference photo at all yet (can't happen for a character the
+        setup wizard/import actually bound an image to, but generation_service
+        must still treat that as a hard error per the reference rule, not
+        silently generate without any identity photo)."""
+        if wardrobe_state and wardrobe_state in self.wardrobe_states:
+            return self.wardrobe_states[wardrobe_state]
+        if view_role and view_role in self.views:
+            return self.views[view_role]
+        if self.reference_image_paths:
+            return self.reference_image_paths[0]
+        return None
 
 
 class ClipVersion(BaseModel):
@@ -85,6 +145,52 @@ class ClipVersion(BaseModel):
     GenerationResult.warning). Non-empty even though the clip generation
     itself succeeded, so a scene that's quietly stuck at raw Wan2.2
     resolution doesn't look identical to a properly upscaled one in the UI."""
+    face_similarity: Optional[float] = None
+    """Cosine similarity (roughly -1..1, higher = more similar) between the
+    character's reference photo and the generated clip's face, the LOWER of
+    the first-frame and last-frame measurements - see core/
+    face_verification.py (task #638). None means the check did not run for
+    this version at all (feature disabled, scene has no single-character
+    identity reference to check against, or the .venv-faceverify
+    environment isn't set up yet) - never a fabricated/assumed value."""
+    face_warning: str = ""
+    """German, user-facing explanation set by core/face_verification.py
+    whenever the automatic face-drift check found a problem (similarity
+    below Project.face_verification_threshold, or no face detected in a
+    checked frame) OR whenever the check could not run despite being
+    enabled (e.g. environment not set up yet) - empty when the check
+    passed, is not applicable to this scene, or is disabled project-wide.
+    Distinct from reference_warning/quality_warning above (different
+    failure classes); see SceneStatus.NEEDS_REVIEW for how this feeds into
+    the scene's overall status."""
+
+
+_IDENTITY_LOCK_TEMPLATE = (
+    "IDENTITY REFERENCE — ABSOLUTE CONTINUITY REQUIREMENT\n"
+    "The attached character reference image for {name} is the binding identity source for this "
+    "shot, not merely a style reference. Use that exact same person in every frame. Do not "
+    "redesign, reinterpret, beautify, age, de-age or replace the character. Preserve exactly the "
+    "reference face geometry, eye shape and color, eyebrows, nose, lips, teeth, jawline, "
+    "cheekbones, ears, skin tone and texture, hairline, hair color, hair length, body proportions "
+    "and apparent age. The character must remain instantly recognizable as the same individual "
+    "from the first frame to the last frame."
+)
+"""Verbatim (English, since it goes into the same prompt sent to the video
+model) anti-drift block per the binding reference rule - see
+Verbindliche_Referenzregel_VOXini_Runway_v2.md (ChatGPT/Neon68 handoff) and
+docs/Referenzbindung_Luecken_und_Plan.md, Punkt 5. Auto-inserted by
+Scene.resolved_prompt() below for every character in a scene, UNLESS the
+scene's prompt_text already contains an equivalent, specifically-approved
+block (see identity_lock_prompt_included)."""
+
+_MULTI_CHARACTER_SEPARATION_TEMPLATE = (
+    "MULTI-CHARACTER SEPARATION\n"
+    "Each attached reference belongs only to its named character: {names}. Keep them as separate, "
+    "stable identities. Never blend or exchange their facial features, hair, clothing, body "
+    "proportions or age."
+)
+"""Added on top of _IDENTITY_LOCK_TEMPLATE whenever a scene has more than one
+character, per the same binding reference rule."""
 
 
 class Scene(BaseModel):
@@ -98,6 +204,44 @@ class Scene(BaseModel):
     """The raw directorial prompt text for this scene, as written by the user
     (or a sub-split of a longer script section)."""
     character_ids: list[str] = Field(default_factory=list)
+    character_wardrobe_states: dict[str, str] = Field(default_factory=dict)
+    """Maps a character_id present in character_ids to the wardrobe state
+    name (see Character.wardrobe_states) that character wears in THIS scene
+    specifically - e.g. the same "Emma" character might be
+    "EMMA_WEDDING_INTERIOR" in one scene and "EMMA_RAIN_FINALE" in another.
+    A character_id with no entry here falls back to Character.
+    resolve_reference_image()'s default (a view, then the general identity
+    anchor)."""
+    character_view_roles: dict[str, str] = Field(default_factory=dict)
+    """Maps a character_id present in character_ids to the camera-angle view
+    (see CharacterViewRole/Character.views) this scene should use for that
+    character when no wardrobe-state override above already determines the
+    reference image - this is what implements binding decision Punkt 4
+    ("pro Figur wird abhaengig von der Kamera-/Blickrichtung die passendste
+    freigegebene Ansicht gewaehlt"). Populated by core/scene_plan_importer.py
+    from the incoming plan's per-character preferred_view_role (already
+    computed by the creative handoff, not re-derived by VOXini itself).
+    A character_id with no entry here falls back to Character.
+    resolve_reference_image()'s default identity anchor."""
+    continuity_reference_path: Optional[str] = None
+    """The "Anschlussbild": last frame of the immediately preceding scene's
+    accepted clip, used as an additional continuity reference (matching
+    wardrobe/wetness/prop/gaze/light state) where the chosen provider
+    supports a second reference image. Set automatically after a scene is
+    accepted (see core/continuity.py) - None means either "this is the
+    first scene", "the previous scene has no accepted clip yet", or "frame
+    extraction failed"; the UI must show this as a plain, honest
+    "nicht verfügbar" rather than silently proceeding as if it were fine
+    (per FINAL_ABNAHME_CHECKLISTE.md)."""
+    identity_lock_prompt_included: bool = False
+    """True for scenes imported from a creative handoff whose prompt_text
+    already contains a specifically-approved, hand-written anti-drift block
+    (see core/scene_plan_importer.py) - resolved_prompt() then skips
+    auto-inserting its own generic _IDENTITY_LOCK_TEMPLATE/
+    _MULTI_CHARACTER_SEPARATION_TEMPLATE to avoid duplicating/diluting the
+    approved wording. False (default) for scenes authored directly in
+    VOXini, where resolved_prompt() provides the automatic protection
+    itself."""
     lyric_lines: list[str] = Field(default_factory=list)
     """SRT lines whose timing falls inside this scene, for reference."""
     status: SceneStatus = SceneStatus.PLANNED
@@ -120,12 +264,22 @@ class Scene(BaseModel):
         return None
 
     def resolved_prompt(self, characters: dict[str, Character]) -> str:
-        """Prompt text with character identity blocks prepended."""
-        blocks = [characters[cid].prompt_block() for cid in self.character_ids if cid in characters]
-        if not blocks:
+        """Prompt text with character identity blocks prepended - see
+        identity_lock_prompt_included above for why imported scenes skip the
+        auto-inserted anti-drift text."""
+        present = [characters[cid] for cid in self.character_ids if cid in characters]
+        if not present:
             return self.prompt_text
-        header = "CHARACTERS:\n" + "\n".join(f"- {b}" for b in blocks)
-        return f"{header}\n\nSCENE:\n{self.prompt_text}"
+        header = "CHARACTERS:\n" + "\n".join(f"- {c.prompt_block()}" for c in present)
+        if self.identity_lock_prompt_included:
+            return f"{header}\n\nSCENE:\n{self.prompt_text}"
+        lock_blocks = "\n\n".join(_IDENTITY_LOCK_TEMPLATE.format(name=c.name) for c in present)
+        parts = [header, lock_blocks]
+        if len(present) > 1:
+            names = ", ".join(c.name for c in present)
+            parts.append(_MULTI_CHARACTER_SEPARATION_TEMPLATE.format(names=names))
+        parts.append(f"SCENE:\n{self.prompt_text}")
+        return "\n\n".join(parts)
 
 
 class ProviderConfig(BaseModel):
@@ -241,6 +395,33 @@ class Project(BaseModel):
     """Running total of actual_cost across all accepted Runway ClipVersions
     in this project - used to enforce runway_budget_limit."""
 
+    face_verification_enabled: bool = False
+    """Off by default so existing projects/behaviour never change silently
+    and so an unattended overnight batch (see comfyui_restart_every_n_scenes
+    above) never blocks on a heavy, not-yet-installed dependency - matches
+    the established opt-in pattern of comfyui_identity_scene_mode. When on,
+    generation_service.generate_scene() runs core/face_verification.py
+    after every successful clip generation for a scene with exactly one
+    identifiable character reference (see face_verification.py for the
+    exact applicability rule), comparing the character's reference photo
+    against the generated clip's first and last frame using InsightFace -
+    this is task #638, the direct response to the real-world identity-drift
+    problem observed in the 'Willkommen bei Neon68' video. Requires the
+    separate, lazily-installed '.venv-faceverify' environment (see core/
+    face_verify_env.py) to actually be set up; if enabled but not yet set
+    up, generation still proceeds normally and only records an honest
+    ClipVersion.face_warning note - it does NOT block or silently install
+    anything mid-generation."""
+    face_verification_threshold: float = 0.40
+    """Minimum cosine similarity (InsightFace buffalo_l embeddings, roughly
+    -1..1) between the character reference photo and a generated frame to
+    count as 'still the same face'. 0.40 is a documented STARTING POINT,
+    not an empirically measured value (no GPU/model available to calibrate
+    it from this development environment, per Entwicklungsvertrag Regel 11
+    - no fabricated test results) - Neon68 should treat this as adjustable
+    per project once real comparisons are visible in the UI, lowering it if
+    genuinely-matching faces get flagged too often, or raising it if
+    drifted faces still pass."""
     social_outro_enabled: bool = False
     """Off by default so existing projects/exports never change silently.
     When on, ffmpeg_assembly.assemble_video() appends a short, statically

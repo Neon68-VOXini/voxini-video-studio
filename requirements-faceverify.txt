@@ -1,0 +1,42 @@
+# Requirements NUR fuer das isolierte Environment ".venv-faceverify"
+# (siehe voxini_studio/core/face_verify_env.py), NICHT fuer das
+# Haupt-Environment (.venv)!
+#
+# Hintergrund: Task #638 - automatische Gesichtskontrolle nach der
+# Generierung, damit VOXini Video Studio nicht die gleichen
+# Identitaets-Drift-Probleme bekommt wie beim realen "Willkommen bei
+# Neon68"-Video (Charaktergesicht veraendert sich leicht von Szene zu
+# Szene gegenueber dem freigegebenen Referenzbild). Siehe
+# docs/Referenzbindung_Luecken_und_Plan.md, Punkt 7.
+#
+# insightface (ArcFace-Gesichtserkennung/-vergleich) + onnxruntime (CPU-
+# Backend, kein GPU-Zwang) sind schwere, eigenstaendige Abhaengigkeiten,
+# die die schlanke Haupt-App (PySide6 + ffmpeg) nicht belasten sollen,
+# wenn das Feature nie aktiviert wird - deshalb ein drittes, komplett
+# getrenntes venv (".venv-faceverify"), nach exakt dem gleichen,
+# bewaehrten Muster wie ".venv-lyrics" (core/lyrics_align_env.py) und
+# ".venv-vocalsplit" im Schwesterprojekt VOXini Studio. Wird NICHT bei
+# jedem Programmstart angelegt, sondern erst wenn Neon68 die
+# Gesichtskontrolle in den Projekteinstellungen aktiviert UND das
+# Environment darueber explizit einrichtet (Fortschrittsanzeige, wie beim
+# Songtext-Feature) - nie stillschweigend mitten in einem laufenden
+# Batch-Auftrag.
+#
+# Modellwahl (Neon68-Entscheidung, 2026-09-05): buffalo_l - das groessere,
+# genauere InsightFace-Modellpaket (ca. 280 MB), bewusst gegen das
+# kleinere buffalo_sc (ca. 16 MB) gewaehlt, um Fehlalarme bei
+# ungewoehnlichen Blickwinkeln/Lichtsituationen zu reduzieren. Das
+# Modellpaket selbst wird von insightface selbst beim ersten Lauf von
+# huggingface/insightface-Servern heruntergeladen (nicht Teil dieser
+# requirements-Datei, siehe scripts/face_verify_worker.py).
+#
+# WICHTIG - Python-Version: analog zu ".venv-lyrics" wird auch dieses
+# venv bewusst mit einer der als kompatibel bekannten Python-Versionen
+# angelegt (siehe face_verify_env.py, COMPATIBLE_PYTHON_VERSIONS), da
+# onnxruntime nicht immer sofort fertige Installationsdateien fuer die
+# jeweils neueste Python-Version bereitstellt.
+numpy
+onnxruntime
+insightface==0.7.3
+opencv-python-headless
+Pillow

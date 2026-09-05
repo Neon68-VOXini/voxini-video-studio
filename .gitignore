@@ -27,6 +27,11 @@ VOXini Video Studio.exe
 *.part
 build/
 dist/
+# Onedir-Build-Ausgabe (PyInstaller), falls direkt im Projektordner statt in
+# einem separaten Zielordner entpackt/gebaut - enthaelt PySide6/Python-DLLs,
+# gehoert nicht ins Repo.
+/_internal/
+/VOXini Video Studio/
 
 # Python
 __pycache__/

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from voxini_studio.core.ffmpeg_assembly import AssemblyError, assemble_video, ready_scenes
 from voxini_studio.core.project_manager import ProjectManager
-from voxini_studio.models.project import AspectRatio
+from voxini_studio.models.project import AspectRatio, SceneStatus
 from voxini_studio.ui import theme
 from voxini_studio.ui.icons import icon
 
@@ -111,8 +111,15 @@ class ExportPanel(QWidget):
         self._on_social_outro_toggled(proj.social_outro_enabled)
         total = len(proj.scenes)
         ready_count = len(ready_scenes(self.pm)) if total else 0
-        self.readiness_label.setText(f"{ready_count} von {total} Szenen haben einen akzeptierten Clip.")
-        role = "success" if total and ready_count == total else "warning" if ready_count else "muted"
+        needs_review_count = sum(1 for s in proj.scenes if s.status == SceneStatus.NEEDS_REVIEW)
+        text = f"{ready_count} von {total} Szenen haben einen akzeptierten Clip."
+        if needs_review_count:
+            text += (
+                f" ({needs_review_count} davon von der automatischen Gesichtskontrolle zur "
+                "Pruefung markiert und vom Export ausgeschlossen.)"
+            )
+        self.readiness_label.setText(text)
+        role = "warning" if needs_review_count else "success" if total and ready_count == total else "warning" if ready_count else "muted"
         self.readiness_label.setProperty("role", role)
         self.readiness_label.style().unpolish(self.readiness_label)
         self.readiness_label.style().polish(self.readiness_label)

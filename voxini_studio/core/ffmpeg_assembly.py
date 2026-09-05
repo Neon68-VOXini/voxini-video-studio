@@ -16,7 +16,7 @@ from pathlib import Path
 
 from voxini_studio.core import ffmpeg_locator
 from voxini_studio.core.project_manager import ProjectManager
-from voxini_studio.models.project import AspectRatio, Scene
+from voxini_studio.models.project import AspectRatio, Scene, SceneStatus
 from voxini_studio.ui.theme import resource_root
 
 FPS = 24  # matches the "24 fps" spec in the directorial prompt format
@@ -65,12 +65,25 @@ def _scale_crop_filter(width: int, height: int) -> str:
 def ready_scenes(pm: ProjectManager) -> list[tuple[Scene, str]]:
     """Scenes (in storyboard order) that have an accepted clip, paired with
     the accepted clip's project-relative file path. Scenes without an
-    accepted version are skipped."""
+    accepted version are skipped.
+
+    A scene in SceneStatus.NEEDS_REVIEW is ALSO skipped, even though it has
+    an accepted_version() - task #638's automatic face-drift check
+    (core/face_verification.py) sets this status when the generated clip's
+    face no longer matches the character's reference photo closely enough,
+    and per SceneStatus.NEEDS_REVIEW's own contract (see models/project.py)
+    the export must refuse to include it until Neon68 explicitly resolves
+    that (re-running generation successfully, which moves it back to DONE,
+    or manually overriding it back to DONE from the storyboard once
+    satisfied it's actually fine) - silently exporting a flagged scene
+    would defeat the entire point of the check."""
     proj = pm.project
     if proj is None:
         raise AssemblyError("No project is open")
     out = []
     for scene in proj.sorted_scenes():
+        if scene.status == SceneStatus.NEEDS_REVIEW:
+            continue
         version = scene.accepted_version()
         if version is not None and version.file_path:
             out.append((scene, version.file_path))

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from voxini_studio.core import credentials
+from voxini_studio.core import credentials, face_verify_env
 from voxini_studio.core.environment_check import REQUIRED_MODELS, check_environment, free_disk_space_gb
 from voxini_studio.core.model_downloader import DownloadError, download_file, format_size, plan_downloads
 from voxini_studio.core.project_manager import ProjectManager
@@ -56,10 +56,45 @@ from voxini_studio.ui.icons import icon
 from voxini_studio.ui.model_download_confirm_dialog import ModelDownloadConfirmDialog
 
 
+class _FaceVerifyEnvWorker(QObject):
+    """Fuehrt face_verify_env.ensure_faceverify_env() auf einem Hintergrund-
+    Thread aus (gleiches Muster wie _LyricsSyncWorker in
+    ui/lyrics_sync_dialog.py), damit das mehrere Minuten dauernde
+    Environment-Setup (Task #638, Gesichtskontrolle) die UI nicht einfriert."""
+
+    progress = Signal(int, str)
+    finished = Signal()
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        import threading
+        self.cancel_event = threading.Event()
+
+    def run(self) -> None:
+        try:
+            face_verify_env.ensure_faceverify_env(
+                progress=lambda pct, stage: self.progress.emit(pct, stage),
+                cancel_event=self.cancel_event,
+            )
+        except face_verify_env.FaceVerifyEnvCancelled:
+            self.cancelled.emit()
+        except face_verify_env.FaceVerifyEnvError as exc:
+            self.failed.emit(str(exc))
+        except Exception as exc:  # noqa: BLE001 - Sicherheitsnetz, siehe lyrics_sync_dialog.py-Vorbild
+            self.failed.emit(f"Unerwarteter Fehler: {exc}")
+        else:
+            self.finished.emit()
+
+
 class LocalSetupPage(QWidget):
     def __init__(self, pm: ProjectManager) -> None:
         super().__init__()
         self.pm = pm
+        self._faceverify_thread: QThread | None = None
+        self._faceverify_worker: _FaceVerifyEnvWorker | None = None
+        self._faceverify_progress_dialog: QProgressDialog | None = None
         layout = QVBoxLayout(self)
 
         info = QLabel(
@@ -128,6 +163,48 @@ class LocalSetupPage(QWidget):
         identity_form.addRow("Negativ-Prompt (SDXL/InstantID):", self.identity_negative_prompt_edit)
         identity_layout.addLayout(identity_form)
         layout.addWidget(identity_box)
+
+        faceverify_box = QGroupBox("Automatische Gesichtskontrolle (Task #638, experimentell)")
+        faceverify_layout = QVBoxLayout(faceverify_box)
+        faceverify_info = QLabel(
+            "Standardmäßig aus. Wenn an: nach jeder erfolgreichen Generierung wird das erste und "
+            "letzte Frame des Clips automatisch gegen das Charakter-Referenzbild geprüft (InsightFace, "
+            "lokal, kein Cloud-Upload) - genau das Problem, das beim echten 'Willkommen bei Neon68'-Video "
+            "aufgetreten ist (Gesicht driftet leicht von Szene zu Szene ab). Fällt die Ähnlichkeit unter "
+            "die Schwelle oder wird gar kein Gesicht erkannt, wird die Szene als 'Prüfung nötig' markiert "
+            "und automatisch vom Export ausgeschlossen, bis du sie im Storyboard prüfst. Gilt nur für "
+            "Szenen mit genau einem Charakter (kein Anschlussbild gleichzeitig, siehe Punkt 3)."
+        )
+        faceverify_info.setWordWrap(True)
+        faceverify_info.setProperty("role", "muted")
+        faceverify_layout.addWidget(faceverify_info)
+        self.faceverify_checkbox = QCheckBox("Automatische Gesichtskontrolle verwenden")
+        faceverify_layout.addWidget(self.faceverify_checkbox)
+        faceverify_form = QFormLayout()
+        self.faceverify_threshold_spin = QDoubleSpinBox()
+        self.faceverify_threshold_spin.setRange(0.0, 1.0)
+        self.faceverify_threshold_spin.setSingleStep(0.01)
+        self.faceverify_threshold_spin.setDecimals(2)
+        faceverify_form.addRow("Ähnlichkeits-Schwelle:", self.faceverify_threshold_spin)
+        faceverify_layout.addLayout(faceverify_form)
+        threshold_hint = QLabel(
+            "0,40 ist ein dokumentierter Startwert, keine gemessene Empfehlung - bei zu vielen "
+            "Fehlalarmen senken, bei durchrutschendem Drift erhöhen."
+        )
+        threshold_hint.setWordWrap(True)
+        threshold_hint.setProperty("role", "muted")
+        faceverify_layout.addWidget(threshold_hint)
+
+        self.faceverify_env_label = QLabel("")
+        self.faceverify_env_label.setWordWrap(True)
+        self.faceverify_env_label.setProperty("role", "muted")
+        faceverify_layout.addWidget(self.faceverify_env_label)
+        faceverify_setup_btn = QPushButton(" Environment jetzt einrichten...")
+        faceverify_setup_btn.setIcon(icon("download", theme.palette().text))
+        faceverify_setup_btn.clicked.connect(self._setup_faceverify_env)
+        faceverify_layout.addWidget(faceverify_setup_btn)
+        layout.addWidget(faceverify_box)
+        self._refresh_faceverify_env_info()
 
         dir_box = QGroupBox("Installations- und Modellordner")
         dir_form = QFormLayout(dir_box)
@@ -215,6 +292,8 @@ class LocalSetupPage(QWidget):
         self.upscale_checkbox.setChecked(proj.comfyui_upscale_to_1080p)
         self.negative_prompt_edit.setText(proj.comfyui_negative_prompt)
         self.identity_negative_prompt_edit.setText(proj.comfyui_identity_negative_prompt)
+        self.faceverify_checkbox.setChecked(proj.face_verification_enabled)
+        self.faceverify_threshold_spin.setValue(proj.face_verification_threshold)
 
     def apply_to_project(self) -> None:
         proj = self.pm.project
@@ -231,6 +310,91 @@ class LocalSetupPage(QWidget):
         proj.comfyui_upscale_to_1080p = self.upscale_checkbox.isChecked()
         proj.comfyui_negative_prompt = self.negative_prompt_edit.text().strip()
         proj.comfyui_identity_negative_prompt = self.identity_negative_prompt_edit.text().strip()
+        proj.face_verification_enabled = self.faceverify_checkbox.isChecked()
+        proj.face_verification_threshold = self.faceverify_threshold_spin.value()
+
+    # -- Gesichtskontrolle (Task #638) -----------------------------------
+    def _refresh_faceverify_env_info(self) -> None:
+        info = face_verify_env.environment_info()
+        self.faceverify_env_label.setText(info["note"])
+
+    def _setup_faceverify_env(self) -> None:
+        info = face_verify_env.environment_info()
+        if info["ready"]:
+            QMessageBox.information(
+                self, "Bereits eingerichtet",
+                "Das isolierte Environment fuer die Gesichtskontrolle ist bereits eingerichtet.",
+            )
+            return
+        reply = QMessageBox.question(
+            self, "Gesichtskontrolle einrichten",
+            f"{info['note']}\n\nJetzt einrichten?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self._faceverify_progress_dialog = QProgressDialog(
+            "Environment fuer die Gesichtskontrolle wird eingerichtet ...", "Abbrechen", 0, 100, self
+        )
+        self._faceverify_progress_dialog.setWindowModality(Qt.WindowModal)
+        self._faceverify_progress_dialog.setMinimumDuration(0)
+        self._faceverify_progress_dialog.setAutoClose(False)
+        self._faceverify_progress_dialog.setAutoReset(False)
+        self._faceverify_progress_dialog.canceled.connect(self._on_faceverify_cancel_requested)
+
+        self._faceverify_thread = QThread(self)
+        self._faceverify_worker = _FaceVerifyEnvWorker()
+        self._faceverify_worker.moveToThread(self._faceverify_thread)
+        self._faceverify_thread.started.connect(self._faceverify_worker.run)
+        self._faceverify_worker.progress.connect(self._on_faceverify_progress)
+        self._faceverify_worker.finished.connect(self._on_faceverify_finished)
+        self._faceverify_worker.failed.connect(self._on_faceverify_failed)
+        self._faceverify_worker.cancelled.connect(self._on_faceverify_cancelled)
+        for signal in (self._faceverify_worker.finished, self._faceverify_worker.failed, self._faceverify_worker.cancelled):
+            signal.connect(self._faceverify_thread.quit)
+        self._faceverify_thread.finished.connect(self._on_faceverify_thread_finished)
+        self._faceverify_thread.start()
+        self._faceverify_progress_dialog.show()
+
+    def _on_faceverify_thread_finished(self) -> None:
+        # Gleiches Aufräum-Muster wie ui/lyrics_sync_dialog.py: Worker/Thread
+        # erst nach thread.finished per deleteLater() freigeben.
+        if self._faceverify_worker is not None:
+            self._faceverify_worker.deleteLater()
+        if self._faceverify_thread is not None:
+            self._faceverify_thread.deleteLater()
+        self._faceverify_worker = None
+        self._faceverify_thread = None
+
+    def _on_faceverify_cancel_requested(self) -> None:
+        if self._faceverify_worker is not None:
+            self._faceverify_worker.cancel_event.set()
+
+    def _on_faceverify_progress(self, percent: int, stage: str) -> None:
+        if self._faceverify_progress_dialog is not None:
+            self._faceverify_progress_dialog.setValue(max(0, min(100, percent)))
+            self._faceverify_progress_dialog.setLabelText(stage)
+
+    def _on_faceverify_finished(self) -> None:
+        if self._faceverify_progress_dialog is not None:
+            self._faceverify_progress_dialog.close()
+            self._faceverify_progress_dialog = None
+        self._refresh_faceverify_env_info()
+        QMessageBox.information(
+            self, "Fertig", "Environment fuer die Gesichtskontrolle wurde erfolgreich eingerichtet."
+        )
+
+    def _on_faceverify_failed(self, message: str) -> None:
+        if self._faceverify_progress_dialog is not None:
+            self._faceverify_progress_dialog.close()
+            self._faceverify_progress_dialog = None
+        QMessageBox.critical(self, "Einrichtung fehlgeschlagen", message)
+
+    def _on_faceverify_cancelled(self) -> None:
+        if self._faceverify_progress_dialog is not None:
+            self._faceverify_progress_dialog.close()
+            self._faceverify_progress_dialog = None
 
     # -- actions --------------------------------------------------------
     def _pick_install_dir(self) -> None:

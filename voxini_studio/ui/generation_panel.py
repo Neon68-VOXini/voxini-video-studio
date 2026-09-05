@@ -54,6 +54,7 @@ _STATUS_LABEL = {
     SceneStatus.DONE: "fertig",
     SceneStatus.FAILED: "fehlgeschlagen",
     SceneStatus.REJECTED: "abgelehnt",
+    SceneStatus.NEEDS_REVIEW: "Pruefung noetig",
 }
 
 _PROVIDER_ICON = {"comfyui": "cpu", "runway": "cloud", "mock": "wand"}
@@ -399,6 +400,21 @@ class GenerationPanel(QWidget):
             if last_version and warnings:
                 status_item.setIcon(icon("alert-triangle", theme.palette().gold))
                 status_item.setToolTip("\n".join(warnings))
+            elif scene.status == SceneStatus.FAILED and last_version and last_version.error_message:
+                # Make a hard block (missing/non-transmittable reference,
+                # budget limit, provider error, ...) actually visible as to
+                # WHY, not just as an unexplained "fehlgeschlagen" - see
+                # generation_service.resolve_scene_references().
+                status_item.setIcon(icon("x-circle", theme.palette().red))
+                status_item.setToolTip(last_version.error_message)
+            elif scene.status == SceneStatus.NEEDS_REVIEW and last_version:
+                # Task #638 - automatic face-drift check flagged this scene;
+                # see ui/storyboard_view.py for the manual "trotzdem
+                # akzeptieren" override that clears this status.
+                status_item.setIcon(icon("alert-triangle", theme.palette().gold))
+                status_item.setToolTip(
+                    last_version.face_warning or "Automatische Gesichtskontrolle hat ein Problem gemeldet."
+                )
             self.table.setItem(row, 6, status_item)
 
             self.table.setItem(row, 7, QTableWidgetItem(f"{cost:.2f} €"))
@@ -557,8 +573,7 @@ class GenerationPanel(QWidget):
             scenes_and_costs = [(s, resolve_provider(self.pm, s).estimate_cost(s.duration)) for s in scenes]
             provider_label = "Automatisch (pro Szene: Lokal oder Runway laut Einstellung)"
 
-        total_cost = sum(c for _, c in scenes_and_costs)
-        dialog = CostConfirmDialog(self, scenes_and_costs, provider_label, "")
+        dialog = CostConfirmDialog(self, self.pm, scenes_and_costs, provider_label, "")
         if dialog.exec() != CostConfirmDialog.Accepted:
             return
 

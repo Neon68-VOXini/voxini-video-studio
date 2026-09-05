@@ -3,6 +3,8 @@ audio/SRT/prompt, browse it as a table, and edit each scene's prompt text,
 character assignment and notes in a detail panel."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
@@ -22,6 +24,11 @@ from PySide6.QtWidgets import (
 )
 
 from voxini_studio.core.audio_analysis import analyze_audio
+from voxini_studio.core.continuity import (
+    attach_continuity_reference,
+    continuity_candidate,
+    detach_continuity_reference,
+)
 from voxini_studio.core.project_manager import ProjectManager
 from voxini_studio.core.scene_planner import DEFAULT_MAX_CLIP_SECONDS, build_scenes
 from voxini_studio.core.script_parser import parse_prompt_script
@@ -100,6 +107,47 @@ class StoryboardView(QWidget):
         detail_layout.addWidget(QLabel("Notizen"))
         self.notes_edit = QPlainTextEdit()
         detail_layout.addWidget(self.notes_edit, 1)
+
+        # Anschlussbild (continuity reference) - deliberately MANUAL per
+        # Neon68's decision 2026-09-05: see core/continuity.py docstring.
+        # Attaching this ADDS a second simultaneous reference image on top
+        # of any character reference the scene already needs, and no
+        # current provider accepts two at once - so this can turn a
+        # currently-generatable scene into a blocked one (see
+        # generation_service.resolve_scene_references()); the cost-
+        # confirmation dialog will show that plainly before anything is
+        # generated, but the button here also warns up front.
+        detail_layout.addWidget(QLabel("Anschlussbild (Kontinuität zur vorherigen Szene)"))
+        self.continuity_label = QLabel("")
+        self.continuity_label.setProperty("role", "muted")
+        self.continuity_label.setWordWrap(True)
+        detail_layout.addWidget(self.continuity_label)
+        continuity_btn_row = QHBoxLayout()
+        self.attach_continuity_btn = QPushButton(" Anschlussbild übernehmen")
+        self.attach_continuity_btn.setIcon(icon("link", theme.palette().text))
+        self.attach_continuity_btn.clicked.connect(self._attach_continuity)
+        self.detach_continuity_btn = QPushButton(" Entfernen")
+        self.detach_continuity_btn.clicked.connect(self._detach_continuity)
+        continuity_btn_row.addWidget(self.attach_continuity_btn)
+        continuity_btn_row.addWidget(self.detach_continuity_btn)
+        detail_layout.addLayout(continuity_btn_row)
+
+        # Automatische Gesichtskontrolle (Task #638) - siehe core/
+        # face_verification.py. Nur relevant/sichtbar, wenn die letzte
+        # Generierung dieser Szene als "Pruefung noetig" markiert wurde;
+        # die Ueberschreibung ist eine bewusste manuelle Nutzerentscheidung
+        # (gleiche "manuell statt automatisch"-Philosophie wie beim
+        # Anschlussbild oben), NICHT automatisch nach einer gewissen Zeit.
+        detail_layout.addWidget(QLabel("Gesichtskontrolle"))
+        self.face_warning_label = QLabel("")
+        self.face_warning_label.setProperty("role", "muted")
+        self.face_warning_label.setWordWrap(True)
+        detail_layout.addWidget(self.face_warning_label)
+        self.face_override_btn = QPushButton(" Trotzdem akzeptieren")
+        self.face_override_btn.setIcon(icon("check-circle", theme.palette().text))
+        self.face_override_btn.clicked.connect(self._override_face_review)
+        self.face_override_btn.setVisible(False)
+        detail_layout.addWidget(self.face_override_btn)
 
         detail_btn_row = QHBoxLayout()
         self.apply_btn = QPushButton(" Übernehmen")
@@ -240,6 +288,9 @@ class StoryboardView(QWidget):
         self.prompt_edit.setPlainText("")
         self.notes_edit.setPlainText("")
         self.char_list.clear()
+        self.continuity_label.setText("")
+        self.face_warning_label.setText("")
+        self.face_override_btn.setVisible(False)
 
     def _on_row_selected(self) -> None:
         rows = self.table.selectionModel().selectedRows()
@@ -264,6 +315,100 @@ class StoryboardView(QWidget):
             item.setCheckState(Qt.Checked if char.id in scene.character_ids else Qt.Unchecked)
             item.setData(Qt.UserRole, char.id)
             self.char_list.addItem(item)
+
+        self._refresh_continuity_label(scene)
+        self._refresh_face_warning(scene)
+
+    def _refresh_face_warning(self, scene) -> None:
+        version = scene.accepted_version()
+        face_warning = version.face_warning if version is not None else ""
+        if scene.status == SceneStatus.NEEDS_REVIEW:
+            similarity_note = ""
+            if version is not None and version.face_similarity is not None:
+                similarity_note = f" (Ähnlichkeit: {version.face_similarity:.2f})"
+            self.face_warning_label.setText(
+                (face_warning or "Automatische Gesichtskontrolle hat ein Problem gemeldet.")
+                + similarity_note
+            )
+            self.face_warning_label.setProperty("role", "warning")
+            self.face_override_btn.setVisible(True)
+        else:
+            self.face_warning_label.setText(face_warning)
+            self.face_warning_label.setProperty("role", "muted")
+            self.face_override_btn.setVisible(False)
+        self.face_warning_label.style().unpolish(self.face_warning_label)
+        self.face_warning_label.style().polish(self.face_warning_label)
+
+    def _override_face_review(self) -> None:
+        proj = self.pm.project
+        if proj is None or self._selected_index is None:
+            return
+        scene = next((s for s in proj.scenes if s.order == self._selected_index), None)
+        if scene is None:
+            return
+        confirm = QMessageBox.question(
+            self, "Trotzdem akzeptieren",
+            "Die automatische Gesichtskontrolle hat diese Szene zur Prüfung markiert. "
+            "Soll der vorhandene Clip trotzdem als fertig akzeptiert und wieder in den Export "
+            "aufgenommen werden? Das ist eine manuelle Entscheidung - prüfe den Clip vorher selbst.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        scene.status = SceneStatus.DONE
+        proj.touch()
+        self._refresh_face_warning(scene)
+        self.refresh()
+        self.status_label.setText("Szene manuell akzeptiert (Gesichtskontrolle überschrieben).")
+
+    def _refresh_continuity_label(self, scene) -> None:
+        if scene.continuity_reference_path:
+            self.continuity_label.setText(
+                f"Verknüpft: {Path(scene.continuity_reference_path).name} "
+                "(wird als zweites Referenzbild gesendet - siehe Kostenfreigabe-Dialog, "
+                "ob das die Szene sperrt, weil ein Charakter zusätzlich benötigt wird)."
+            )
+        elif continuity_candidate(self.pm, scene) is not None:
+            self.continuity_label.setText(
+                "Verfügbar (letztes Frame der vorherigen Szene), aber noch nicht übernommen."
+            )
+        else:
+            self.continuity_label.setText(
+                "Nicht verfügbar (vorherige Szene hat noch keinen akzeptierten Clip)."
+            )
+
+    def _attach_continuity(self) -> None:
+        proj = self.pm.project
+        if proj is None or self._selected_index is None:
+            return
+        scene = next((s for s in proj.scenes if s.order == self._selected_index), None)
+        if scene is None:
+            return
+        confirm = QMessageBox.question(
+            self, "Anschlussbild übernehmen",
+            "Das Anschlussbild wird als zusätzliches Referenzbild neben einer eventuell "
+            "zugewiesenen Figur gesendet. Kein aktueller Anbieter kann zwei Referenzbilder "
+            "gleichzeitig verarbeiten - hat diese Szene bereits eine Figur, wird sie dadurch "
+            "gesperrt, bis der mehrstufige Schlüsselbild-Workflow existiert. Trotzdem übernehmen?",
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        ok, message = attach_continuity_reference(self.pm, scene)
+        self._refresh_continuity_label(scene)
+        self.status_label.setText(message)
+        if not ok:
+            QMessageBox.warning(self, "Kein Anschlussbild verfügbar", message)
+
+    def _detach_continuity(self) -> None:
+        proj = self.pm.project
+        if proj is None or self._selected_index is None:
+            return
+        scene = next((s for s in proj.scenes if s.order == self._selected_index), None)
+        if scene is None:
+            return
+        detach_continuity_reference(scene)
+        self._refresh_continuity_label(scene)
+        self.status_label.setText("Anschlussbild entfernt.")
 
     def _apply_edits(self) -> None:
         proj = self.pm.project
