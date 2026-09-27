@@ -397,14 +397,19 @@ def test_fill_identity_template_substitutes_checkpoint_and_tokens(provider):
 def test_generate_with_identity_scene_mode_runs_two_stage_pipeline(server, tmp_path):
     """With identity_scene_mode on, a scene with a reference photo must
     submit TWO ComfyUI jobs (stage 1 identity image, stage 2 image-to-video)
-    and upload TWO images (the face reference, then the freshly generated
-    identity-scene image) - not one, like plain image-to-video does. The
-    fake server doesn't model InstantID's real node graph (it just always
-    returns the same canned 'fake_output.mp4' history entry regardless of
-    the submitted workflow), so this only verifies the two-stage plumbing
-    (submit/poll/download/upload wiring, VRAM free between stages), not
-    actual InstantID output quality - that needs a real ComfyUI + the
-    InstantID custom node, which this sandbox does not have."""
+    and upload THREE images - not one, like plain image-to-video does:
+    stage 1 uploads both the raw face reference AND a synthetic image_kps
+    pose image (see _build_character_kps_image's docstring - task #637's
+    2026-09-06 fix for oversized/cropped faces, which affects this
+    single-character path too, not only the multi-character one), then
+    stage 2 uploads the freshly generated identity-scene image as its
+    start_image. The fake server doesn't model InstantID's real node graph
+    (it just always returns the same canned 'fake_output.mp4' history entry
+    regardless of the submitted workflow), so this only verifies the
+    two-stage plumbing (submit/poll/download/upload wiring, VRAM free
+    between stages), not actual InstantID output quality - that needs a
+    real ComfyUI + the InstantID custom node, which this sandbox does not
+    have."""
     p = ComfyUIProvider(
         host="127.0.0.1", port=server.port, resolution="480p",
         identity_scene_mode=True, identity_checkpoint="sd_xl_base_1.0.safetensors",
@@ -421,7 +426,7 @@ def test_generate_with_identity_scene_mode_runs_two_stage_pipeline(server, tmp_p
     assert result.success is True, result.error_message
     assert dest.exists()
     assert server.prompt_call_count == 2
-    assert server.upload_calls == 2
+    assert server.upload_calls == 3
     # stage 2's workflow (the last one submitted) must be the plain
     # image-to-video graph, fed with the stage-1 output - not the raw
     # reference photo directly, and not the identity-stage graph itself.
