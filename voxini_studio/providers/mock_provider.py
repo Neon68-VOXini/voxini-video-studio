@@ -24,11 +24,17 @@ _ASPECT_DIMS = {
 }
 
 
-def _font_path() -> str:
+def _font_path() -> Path:
     """Bundled DejaVu Sans Bold - see ffmpeg_assembly._title_font_path for
-    why this must never be a hardcoded Linux-only path."""
-    font = resource_root() / "fonts" / "DejaVuSans-Bold.ttf"
-    return str(font).replace("\\", "/").replace(":", "\\:")
+    why this must never be a hardcoded Linux-only path.
+
+    Returns the Path itself (not an escaped string) - see generate() for why:
+    the caller runs ffmpeg with this file's parent directory as the working
+    directory and references it by bare filename only, exactly like
+    ffmpeg_assembly.build_title_card() already does, instead of embedding an
+    absolute Windows path (with its drive-letter colon) into the drawtext
+    filter string."""
+    return resource_root() / "fonts" / "DejaVuSans-Bold.ttf"
 
 
 def _safe_text(text: str) -> str:
@@ -57,19 +63,22 @@ class MockProvider(Provider):
 
         seed = int(hashlib.md5(request.scene.id.encode()).hexdigest(), 16) % 360
         label = _safe_text(f"#{request.scene.order} {request.scene.label}")
+        font_path = _font_path()
         drawtext = (
-            f"drawtext=fontfile={_font_path()}:text='{label}':fontcolor=white:fontsize=26:"
+            f"drawtext=fontfile={font_path.name}:text='{label}':fontcolor=white:fontsize=26:"
             f"x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=12"
         )
         vf = f"hue=h={seed}:s=1,{drawtext}"
+        # dest is passed as an absolute path, so it resolves correctly
+        # regardless of the cwd set below for the fontfile lookup.
         cmd = [
             ffmpeg_locator.ffmpeg_path(), "-y",
             "-f", "lavfi", "-i", f"color=c=slateblue:s={width}x{height}:d={duration}:r=24",
             "-vf", vf,
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-            str(dest), "-loglevel", "error",
+            str(dest.resolve()), "-loglevel", "error",
         ]
-        result = subprocess.run(cmd, capture_output=True)
+        result = subprocess.run(cmd, capture_output=True, cwd=font_path.parent)
         if result.returncode != 0:
             return GenerationResult(success=False, error_message=result.stderr.decode()[-1000:])
         return GenerationResult(

@@ -101,6 +101,20 @@ def test_generate_scenes_batch_and_regeneration_creates_new_version(pm):
 
 def test_character_reference_paths_are_resolved_for_request(monkeypatch, pm):
     char = pm.add_character("Emma", "25, dark hair")
+    # Task #634's binding reference rule hard-blocks generate_scene() before
+    # the provider is ever called for a character with no resolvable
+    # reference image (see resolve_scene_references()) - this test predates
+    # that rule and needs a real reference image so it still exercises what
+    # it's actually testing (prompt/reference-path propagation into the
+    # request), instead of always hitting the pre-provider block gate.
+    # Deliberately NOT using pytest's tmp_path fixture here: it depends on
+    # pytest's shared Windows basetemp dir (%TEMP%\pytest-of-<user>), which
+    # this project has already hit real PermissionError lockups on (see
+    # Block 1 Schritt 4). pm.paths.root is a plain tempfile.mkdtemp() dir
+    # from the project_dir fixture instead - no shared basetemp involved.
+    ref_img = Path(pm.paths.root) / "emma_ref_src.png"
+    ref_img.write_bytes(b"\x89PNG\r\n\x1a\n")
+    pm.import_character_reference(char.id, ref_img)
     scene = Scene(order=0, label="EMMA SCENE", start_seconds=0.0, end_seconds=1.0, character_ids=[char.id])
     pm.project.scenes.append(scene)
 
