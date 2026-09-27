@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from voxini_studio.core import environment_check
 from voxini_studio.core.environment_check import (
     REQUIRED_MODELS,
     check_comfyui_connection,
@@ -127,9 +128,19 @@ def test_parse_rocm_version():
     assert parse_rocm_version(HIPCONFIG_SAMPLE) == "6.2.41133-dd7f95766"
 
 
-def test_detect_gpu_returns_not_detected_when_no_tools_present():
-    # in this sandbox there is genuinely no rocm-smi/powershell - this
-    # exercises the real graceful-fallback code path, not a mock
+def test_detect_gpu_returns_not_detected_when_no_tools_present(monkeypatch):
+    # Force shutil.which to report every lookup tool as absent, regardless
+    # of what's actually installed on the machine running this test. A
+    # bare (unpatched) version of this test passed only in a sandbox with
+    # no rocm-smi/nvidia-smi/powershell - on a real Windows dev machine
+    # (with a real GPU, any vendor - NVIDIA, AMD, Intel, ...) it would
+    # always find something via the WMI/powershell fallback and fail, even
+    # though detect_gpu() itself already supports all vendors correctly
+    # (see the NVIDIA/AMD/WMI-fallback tests above, which stay unaffected
+    # by this patch since they call the parse_* functions directly). This
+    # exercises the graceful "genuinely nothing found" code path in
+    # isolation, independent of the test machine's actual hardware.
+    monkeypatch.setattr(environment_check.shutil, "which", lambda name: None)
     info = detect_gpu()
     assert info.detected is False
     assert info.source == "none"
