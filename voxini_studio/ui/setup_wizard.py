@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
 
 from voxini_studio.core import credentials, face_verify_env
 from voxini_studio.core.environment_check import REQUIRED_MODELS, check_environment, free_disk_space_gb
-from voxini_studio.core.model_downloader import DownloadError, download_file, format_size, plan_downloads
+from voxini_studio.core.model_downloader import DownloadError, download_file, format_size, plan_downloads, remote_file_size
 from voxini_studio.core.project_manager import ProjectManager
 from voxini_studio.providers.runway_provider import MODEL_CREDITS_PER_SEC, RunwayAPIError, RunwayProvider
 from voxini_studio.providers.kling_provider import (
@@ -273,16 +273,22 @@ class LocalSetupPage(QWidget):
 
         models_box = QGroupBox("Wan2.2 TI2V 5B Modelldateien")
         models_layout = QVBoxLayout(models_box)
-        self.model_rows: list[tuple[dict, QLabel]] = []
+        self.model_rows: list[tuple[dict, QLabel, QPushButton]] = []
         for spec in REQUIRED_MODELS:
             row = QHBoxLayout()
             label = QLabel(f"{spec['name']}  ({spec['filename']})")
             status = QLabel("")
             status.setProperty("role", "muted")
+            row_download_btn = QPushButton(" Herunterladen")
+            row_download_btn.setIcon(icon("download", theme.palette().text))
+            row_download_btn.clicked.connect(
+                lambda checked=False, s=spec, lbl=status: self._download_model(s, lbl)
+            )
             row.addWidget(label, 1)
             row.addWidget(status)
+            row.addWidget(row_download_btn)
             models_layout.addLayout(row)
-            self.model_rows.append((spec, status))
+            self.model_rows.append((spec, status, row_download_btn))
 
         download_row = QHBoxLayout()
         download_all_btn = QPushButton(" Fehlende Modelle herunterladen...")
@@ -489,7 +495,7 @@ class LocalSetupPage(QWidget):
         )
         self.report.setPlainText("\n".join(lines))
 
-        for spec, status_label in self.model_rows:
+        for spec, status_label, _download_btn in self.model_rows:
             m = next((x for x in report.models if x.filename == spec["filename"]), None)
             if m and m.found:
                 status_label.setText(f"vorhanden ({m.size_bytes / (1024**3):.2f} GB)")
@@ -570,6 +576,67 @@ class LocalSetupPage(QWidget):
         self._run_check()  # Status-Labels + Bericht mit dem neuen Ist-Stand aktualisieren
         if not cancelled:
             QMessageBox.information(self, "Fertig", f"{len(missing)} Modelldatei(en) erfolgreich heruntergeladen.")
+
+    def _download_model(self, spec: dict, status_label: QLabel) -> None:
+        """Einzel-Download-Button pro Modellzeile - dieselbe verbindliche
+        Größe/Zielordner-Bestätigung wie bei _download_missing_models (siehe
+        Moduldocstring), nur für genau EINE Datei statt für alle fehlenden
+        auf einmal. Nützlich, wenn nur ein bestimmtes Modell fehlt/neu
+        heruntergeladen werden soll, ohne die anderen erneut anzufassen."""
+        proj = self.pm.project
+        if proj is None:
+            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            return
+        if not proj.comfyui_models_dir:
+            QMessageBox.warning(
+                self, "Kein Modellordner",
+                "Bitte zuerst oben einen Modellordner wählen, bevor Modelle heruntergeladen werden.",
+            )
+            return
+
+        dest = Path(proj.comfyui_models_dir) / spec["subdir"] / spec["filename"]
+        size_bytes = remote_file_size(spec["url"])
+        size_text = (
+            format_size(size_bytes) if size_bytes
+            else f"~{spec.get('approx_size_gb', '?')} GB (Schätzung - Server antwortete nicht auf Größenabfrage)"
+        )
+        reply = QMessageBox.question(
+            self, "Modell herunterladen?",
+            f"„{spec['filename']}“ ({size_text}) wird heruntergeladen nach:\n{dest}\n\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        progress = QProgressDialog(f"Lade {spec['filename']} herunter...", "Abbrechen", 0, 100, self)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+
+        def on_progress(done: int, total: int) -> None:
+            if total:
+                progress.setValue(int(done / total * 100))
+            QApplication.processEvents()
+
+        def cancel_check() -> bool:
+            return progress.wasCanceled()
+
+        try:
+            download_file(spec["url"], dest, progress_callback=on_progress, cancel_check=cancel_check)
+        except DownloadError as exc:
+            progress.close()
+            if progress.wasCanceled():
+                QMessageBox.information(self, "Abgebrochen", f"Download von „{spec['filename']}“ abgebrochen.")
+            else:
+                QMessageBox.critical(self, "Download fehlgeschlagen", f"„{spec['filename']}“: {exc}")
+            return
+
+        progress.close()
+        status_label.setText("heruntergeladen")
+        status_label.setProperty("role", "success")
+        status_label.style().unpolish(status_label)
+        status_label.style().polish(status_label)
+        QMessageBox.information(self, "Fertig", f"„{spec['filename']}“ wurde erfolgreich heruntergeladen.")
 
 
 class RunwaySetupPage(QWidget):
