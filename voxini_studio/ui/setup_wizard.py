@@ -51,6 +51,21 @@ from voxini_studio.core.environment_check import REQUIRED_MODELS, check_environm
 from voxini_studio.core.model_downloader import DownloadError, download_file, format_size, plan_downloads
 from voxini_studio.core.project_manager import ProjectManager
 from voxini_studio.providers.runway_provider import MODEL_CREDITS_PER_SEC, RunwayAPIError, RunwayProvider
+from voxini_studio.providers.kling_provider import (
+    MODEL_USD_PER_SECOND as KLING_MODEL_USD_PER_SECOND,
+    KlingAPIError,
+    KlingProvider,
+)
+from voxini_studio.providers.seedance_provider import (
+    ROUGH_USD_PER_SECOND_720P as SEEDANCE_USD_PER_SECOND,
+    SeedanceAPIError,
+    SeedanceProvider,
+)
+from voxini_studio.providers.veo_provider import (
+    ROUGH_USD_PER_SECOND as VEO_MODEL_USD_PER_SECOND,
+    VeoAPIError,
+    VeoProvider,
+)
 from voxini_studio.ui import theme
 from voxini_studio.ui.icons import icon
 from voxini_studio.ui.model_download_confirm_dialog import ModelDownloadConfirmDialog
@@ -129,10 +144,24 @@ class LocalSetupPage(QWidget):
 
         quality_box = QGroupBox("Qualität")
         quality_form = QFormLayout(quality_box)
+        self.local_model_combo = QComboBox()
+        self.local_model_combo.addItem("Wan2.2 TI2V 5B (Standard, weniger VRAM/Speicher)", "wan22")
+        self.local_model_combo.addItem("LTX-2.5 22B (experimentell, braucht gated HF-Zugang + viel RAM/VRAM)", "ltx25")
+        quality_form.addRow("Lokales Modell:", self.local_model_combo)
+        local_model_hint = QLabel(
+            "LTX-2.5 22B braucht eigene, zugangsbeschränkte Modelldateien von "
+            "huggingface.co/Lightricks/LTX-2.5 (nicht in VOXini enthalten, nicht automatisch "
+            "heruntergeladen) und in der Praxis eine größere Windows-Auslagerungsdatei, um die "
+            "22-Milliarden-Parameter-Gewichte zu laden. Text-zu-Video wurde einmal erfolgreich live "
+            "gegen ein echtes ComfyUI getestet; Bild-zu-Video ist noch nicht eigenständig live getestet."
+        )
+        local_model_hint.setWordWrap(True)
+        local_model_hint.setProperty("role", "muted")
+        quality_form.addRow("", local_model_hint)
         self.resolution_combo = QComboBox()
         self.resolution_combo.addItem("480p (schneller)", "480p")
         self.resolution_combo.addItem("720p (Standard)", "720p")
-        quality_form.addRow("Wan2.2-Auflösung:", self.resolution_combo)
+        quality_form.addRow("Auflösung:", self.resolution_combo)
         self.upscale_checkbox = QCheckBox("Lokal auf 1080p hochskalieren (ffmpeg, nach der Generierung)")
         quality_form.addRow("", self.upscale_checkbox)
         self.negative_prompt_edit = QLineEdit()
@@ -287,6 +316,8 @@ class LocalSetupPage(QWidget):
         self.models_dir_edit.setText(proj.comfyui_models_dir or "(nicht gesetzt)")
         self.identity_scene_checkbox.setChecked(proj.comfyui_identity_scene_mode)
         self.identity_checkpoint_edit.setText(proj.comfyui_identity_checkpoint)
+        model_idx = self.local_model_combo.findData(proj.comfyui_local_model)
+        self.local_model_combo.setCurrentIndex(model_idx if model_idx >= 0 else self.local_model_combo.findData("wan22"))
         idx = self.resolution_combo.findData(proj.comfyui_resolution)
         self.resolution_combo.setCurrentIndex(idx if idx >= 0 else self.resolution_combo.findData("720p"))
         self.upscale_checkbox.setChecked(proj.comfyui_upscale_to_1080p)
@@ -304,8 +335,9 @@ class LocalSetupPage(QWidget):
         proj.comfyui_restart_every_n_scenes = self.restart_every_spin.value()
         proj.comfyui_identity_scene_mode = self.identity_scene_checkbox.isChecked()
         proj.comfyui_identity_checkpoint = (
-            self.identity_checkpoint_edit.text().strip() or "sd_xl_base_1.0.safetensors"
+            self.identity_checkpoint_edit.text().strip() or "SDXL\\sd_xl_base_1.0.safetensors"
         )
+        proj.comfyui_local_model = self.local_model_combo.currentData() or "wan22"
         proj.comfyui_resolution = self.resolution_combo.currentData() or "720p"
         proj.comfyui_upscale_to_1080p = self.upscale_checkbox.isChecked()
         proj.comfyui_negative_prompt = self.negative_prompt_edit.text().strip()
@@ -658,6 +690,185 @@ class RunwaySetupPage(QWidget):
         )
 
 
+class CloudProviderSetupPage(QWidget):
+    """Task #665: a single generic setup page reused for Kling, Seedance
+    and Veo instead of copy-pasting RunwaySetupPage three times - all
+    three follow the exact same shape (warning, API-key box via
+    core.credentials' generic get_api_key/set_api_key/delete_api_key,
+    model+budget box, free connection test). Kling's credential is an
+    "AccessKey:SecretKey" pair (see kling_provider.py), so this page
+    optionally shows a SECOND key field for that provider only
+    (`second_key_label`); Seedance/Veo use a single plain API key like
+    Runway.
+    """
+
+    def __init__(
+        self,
+        pm: ProjectManager,
+        provider_id: str,
+        display_name: str,
+        warning_text: str,
+        model_prices: dict[str, float],
+        price_unit_label: str,
+        project_model_attr: str,
+        project_budget_attr: str,
+        project_spent_attr: str,
+        provider_factory,
+        api_error_cls: type[Exception],
+        second_key_label: str | None = None,
+        key_placeholder: str = "",
+    ) -> None:
+        super().__init__()
+        self.pm = pm
+        self.provider_id = provider_id
+        self.project_model_attr = project_model_attr
+        self.project_budget_attr = project_budget_attr
+        self.project_spent_attr = project_spent_attr
+        self.provider_factory = provider_factory
+        self.api_error_cls = api_error_cls
+        self.second_key_label = second_key_label
+        layout = QVBoxLayout(self)
+
+        warn = QLabel(warning_text)
+        warn.setWordWrap(True)
+        warn.setProperty("role", "warning")
+        layout.addWidget(warn)
+
+        key_box = QGroupBox(f"{display_name} API-Schlüssel (sicher gespeichert über Windows Credential Manager)")
+        key_form = QFormLayout(key_box)
+        self.key_edit = QLineEdit()
+        self.key_edit.setEchoMode(QLineEdit.Password)
+        self.key_edit.setPlaceholderText(key_placeholder)
+        key_form.addRow("API-Schlüssel:" if not second_key_label else "AccessKey:", self.key_edit)
+
+        self.second_key_edit: QLineEdit | None = None
+        if second_key_label:
+            self.second_key_edit = QLineEdit()
+            self.second_key_edit.setEchoMode(QLineEdit.Password)
+            key_form.addRow(f"{second_key_label}:", self.second_key_edit)
+
+        key_btns = QHBoxLayout()
+        save_key_btn = QPushButton(" Schlüssel speichern")
+        save_key_btn.setIcon(icon("key", theme.palette().text))
+        save_key_btn.clicked.connect(self._save_key)
+        delete_key_btn = QPushButton(" Schlüssel löschen")
+        delete_key_btn.setProperty("role", "danger")
+        delete_key_btn.clicked.connect(self._delete_key)
+        test_btn = QPushButton(" Verbindung testen (kostenlos)")
+        test_btn.setIcon(icon("link", theme.palette().text))
+        test_btn.clicked.connect(self._test_connection)
+        key_btns.addWidget(save_key_btn)
+        key_btns.addWidget(delete_key_btn)
+        key_btns.addWidget(test_btn)
+        key_form.addRow("", key_btns)
+
+        self.key_status = QLabel("")
+        self.key_status.setProperty("role", "muted")
+        key_form.addRow("", self.key_status)
+        layout.addWidget(key_box)
+
+        settings_box = QGroupBox("Modell und Budget")
+        settings_form = QFormLayout(settings_box)
+        self.model_combo = QComboBox()
+        for model_id, price in model_prices.items():
+            self.model_combo.addItem(f"{model_id}  (~{price:.2f} {price_unit_label})", model_id)
+        settings_form.addRow("Modell:", self.model_combo)
+
+        self.budget_spin = QDoubleSpinBox()
+        self.budget_spin.setRange(0.0, 100000.0)
+        self.budget_spin.setDecimals(2)
+        self.budget_spin.setSuffix(" $")
+        self.budget_spin.setSpecialValueText("Kein Limit gesetzt")
+        settings_form.addRow("Budgetlimit:", self.budget_spin)
+
+        self.spent_label = QLabel("")
+        self.spent_label.setProperty("role", "gold")
+        settings_form.addRow("Bisher ausgegeben:", self.spent_label)
+        layout.addWidget(settings_box)
+
+        layout.addStretch(1)
+        self.refresh_from_project()
+
+    def refresh_from_project(self) -> None:
+        stored = credentials.get_api_key(self.provider_id)
+        self.key_status.setText(
+            "Gespeichert (Fallback-Datei, nicht Windows Credential Manager)"
+            if credentials.using_fallback_store() and stored
+            else "Gespeichert (Windows Credential Manager)" if stored
+            else "Kein Schlüssel gespeichert"
+        )
+        proj = self.pm.project
+        if proj is None:
+            return
+        idx = self.model_combo.findData(getattr(proj, self.project_model_attr))
+        if idx >= 0:
+            self.model_combo.setCurrentIndex(idx)
+        self.budget_spin.setValue(getattr(proj, self.project_budget_attr))
+        self.spent_label.setText(f"{getattr(proj, self.project_spent_attr):.2f} $")
+
+    def apply_to_project(self) -> None:
+        proj = self.pm.project
+        if proj is None:
+            return
+        model_id = self.model_combo.currentData()
+        if model_id:
+            setattr(proj, self.project_model_attr, model_id)
+        setattr(proj, self.project_budget_attr, self.budget_spin.value())
+
+    def _current_key_value(self) -> str:
+        key = self.key_edit.text().strip()
+        if self.second_key_label and self.second_key_edit is not None:
+            secret = self.second_key_edit.text().strip()
+            return f"{key}:{secret}" if key and secret else ""
+        return key
+
+    def _save_key(self) -> None:
+        value = self._current_key_value()
+        if not value:
+            msg = (
+                "Bitte AccessKey UND SecretKey eingeben."
+                if self.second_key_label else "Bitte einen API-Schlüssel eingeben."
+            )
+            QMessageBox.warning(self, "Kein Schlüssel", msg)
+            return
+        credentials.set_api_key(self.provider_id, value)
+        self.key_edit.clear()
+        if self.second_key_edit is not None:
+            self.second_key_edit.clear()
+        self.refresh_from_project()
+        QMessageBox.information(self, "Gespeichert", "Der API-Schlüssel wurde sicher gespeichert.")
+
+    def _delete_key(self) -> None:
+        credentials.delete_api_key(self.provider_id)
+        self.refresh_from_project()
+
+    def _test_connection(self) -> None:
+        typed = self._current_key_value()
+        if self.second_key_label:
+            access, _, secret = typed.partition(":")
+            provider = self.provider_factory(access_key=access or None, secret_key=secret or None)
+        else:
+            provider = self.provider_factory(api_key=typed or None)
+        try:
+            info = provider.check_connection()
+        except self.api_error_cls as exc:
+            QMessageBox.critical(self, "Verbindung fehlgeschlagen", str(exc))
+            return
+        if isinstance(info, dict) and set(info.keys()) == {"key_present"}:
+            # Providers with no known no-cost "account info" endpoint (see
+            # e.g. SeedanceProvider.check_connection's own docstring) only
+            # verify locally that a key is configured - be honest about
+            # that instead of implying a real network round-trip happened.
+            QMessageBox.information(
+                self, "Schlüssel vorhanden",
+                "Ein API-Schlüssel ist konfiguriert. Für diesen Anbieter gibt es keinen bekannten "
+                "kostenlosen Test-Endpunkt - eine echte Verbindung wird erst beim ersten kostenpflichtigen "
+                "Auftrag geprüft.",
+            )
+            return
+        QMessageBox.information(self, "Verbindung erfolgreich", "Verbindung erfolgreich hergestellt.")
+
+
 class SetupWizardDialog(QDialog):
     def __init__(self, parent, pm: ProjectManager) -> None:
         super().__init__(parent)
@@ -667,6 +878,53 @@ class SetupWizardDialog(QDialog):
 
         self.local_page = LocalSetupPage(pm)
         self.runway_page = RunwaySetupPage(pm)
+
+        # Task #665 (Kling/Seedance/Veo integration, "Bau alle ein"):
+        # one CloudProviderSetupPage instance per new provider - see that
+        # class's docstring for why this isn't 3 copy-pasted
+        # RunwaySetupPage-alikes.
+        self.kling_page = CloudProviderSetupPage(
+            pm, provider_id="kling", display_name="Kling AI",
+            warning_text=(
+                "Kling AI ist ein optionaler, KOSTENPFLICHTIGER Cloud-Anbieter mit echter "
+                "Mehrfiguren-Unterstuetzung (mehrere Referenzbilder pro Auftrag). Er wird niemals "
+                "automatisch verwendet - nur wenn du ihn explizit auswaehlst, und nur nach ausdruecklicher "
+                "Kostenbestaetigung vor jedem einzelnen Auftrag. HINWEIS: Kling's Preis-/API-Details "
+                "basieren teils auf Drittanbieter-Dokumentation (siehe kling_provider.py) - vor "
+                "kostenpflichtiger Nutzung erst mit kleinem Betrag testen."
+            ),
+            model_prices=KLING_MODEL_USD_PER_SECOND, price_unit_label="$/s",
+            project_model_attr="kling_model_id", project_budget_attr="kling_budget_limit",
+            project_spent_attr="kling_spent_total", provider_factory=KlingProvider,
+            api_error_cls=KlingAPIError, second_key_label="SecretKey",
+            key_placeholder="AccessKey",
+        )
+        self.seedance_page = CloudProviderSetupPage(
+            pm, provider_id="seedance", display_name="Seedance (ByteDance)",
+            warning_text=(
+                "Seedance ist ein optionaler, KOSTENPFLICHTIGER Cloud-Anbieter (ByteDance/BytePlus "
+                "ModelArk) mit Mehrfiguren-Unterstuetzung ueber mehrere Referenzbilder. Er wird niemals "
+                "automatisch verwendet. HINWEIS: Preis ist eine grobe Schaetzung, keine verifizierte "
+                "Abrechnung (siehe seedance_provider.py) - vor Nutzung mit kleinem Betrag testen."
+            ),
+            model_prices={"doubao-seedance-1-0-lite-i2v-250428": SEEDANCE_USD_PER_SECOND}, price_unit_label="$/s (Schätzung)",
+            project_model_attr="seedance_model_id", project_budget_attr="seedance_budget_limit",
+            project_spent_attr="seedance_spent_total", provider_factory=SeedanceProvider,
+            api_error_cls=SeedanceAPIError, key_placeholder="API-Schlüssel",
+        )
+        self.veo_page = CloudProviderSetupPage(
+            pm, provider_id="veo", display_name="Google Veo 3.1",
+            warning_text=(
+                "Google Veo 3.1 ist ein optionaler, KOSTENPFLICHTIGER Cloud-Anbieter (Gemini API) mit "
+                "Mehrfiguren-Unterstuetzung ueber bis zu 3 Referenzbilder ('Ingredients to Video'). Er "
+                "wird niemals automatisch verwendet. Der API-Schluessel ist ein normaler Google "
+                "Gemini-API-Schluessel."
+            ),
+            model_prices=VEO_MODEL_USD_PER_SECOND, price_unit_label="$/s (Schätzung)",
+            project_model_attr="veo_model_id", project_budget_attr="veo_budget_limit",
+            project_spent_attr="veo_spent_total", provider_factory=VeoProvider,
+            api_error_cls=VeoAPIError, key_placeholder="Gemini API-Schlüssel",
+        )
 
         def _scrollable(w: QWidget) -> QScrollArea:
             # Each page's own content (report box, model list, etc.) can grow
@@ -684,6 +942,9 @@ class SetupWizardDialog(QDialog):
         tabs = QTabWidget()
         tabs.addTab(_scrollable(self.local_page), "Lokal (ComfyUI) - kostenlos")
         tabs.addTab(_scrollable(self.runway_page), "Cloud (Runway) - kostenpflichtig")
+        tabs.addTab(_scrollable(self.kling_page), "Cloud (Kling) - kostenpflichtig")
+        tabs.addTab(_scrollable(self.seedance_page), "Cloud (Seedance) - kostenpflichtig")
+        tabs.addTab(_scrollable(self.veo_page), "Cloud (Veo 3.1) - kostenpflichtig")
         layout.addWidget(tabs, 1)
 
         # Size the dialog to fit comfortably within the actual screen instead
@@ -708,6 +969,9 @@ class SetupWizardDialog(QDialog):
     def _accept(self) -> None:
         self.local_page.apply_to_project()
         self.runway_page.apply_to_project()
+        self.kling_page.apply_to_project()
+        self.seedance_page.apply_to_project()
+        self.veo_page.apply_to_project()
         if self.pm.project is not None:
             self.pm.save()
         self.accept()

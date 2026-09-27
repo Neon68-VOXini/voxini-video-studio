@@ -39,6 +39,14 @@ def provider(server, tmp_path):
     )
 
 
+@pytest.fixture()
+def ltx25_provider(server, tmp_path):
+    return ComfyUIProvider(
+        host="127.0.0.1", port=server.port, resolution="480p",
+        upscale_to_1080p=True, workflows_dir=None, local_model="ltx25",
+    )
+
+
 def _scene(duration: float = 3.0) -> Scene:
     return Scene(order=1, label="TEST", start_seconds=0.0, end_seconds=duration, prompt_text="A calm lake at dawn")
 
@@ -92,6 +100,79 @@ def test_fill_template_substitutes_all_tokens(provider):
     assert filled["3"]["inputs"]["seed"] == 42
     assert filled["58"]["inputs"]["filename_prefix"] == "voxini_test"
     assert "_comment" not in filled
+
+
+# -- local_model="ltx25" workflow templates (task #773/#777) -------------
+# Loading/filling only - no real network call, same "fake server, zero
+# cost" guarantee as the rest of this suite (submit_job/wait_for_job for
+# ltx25 aren't separately tested here since ComfyUIProvider's HTTP-facing
+# code paths are model-agnostic and already covered above for wan22).
+
+def test_local_model_defaults_to_wan22(provider):
+    assert provider.local_model == "wan22"
+    assert provider.display_name == "Lokal - ComfyUI / Wan2.2 5B (kostenlos)"
+
+
+def test_unknown_local_model_falls_back_to_wan22(server):
+    p = ComfyUIProvider(host="127.0.0.1", port=server.port, local_model="does-not-exist")
+    assert p.local_model == "wan22"
+
+
+def test_load_ltx25_text_to_video_template_has_no_image_node(ltx25_provider):
+    tpl = ltx25_provider.load_workflow_template(image_mode=False)
+    assert "395" not in tpl  # LoadImage only exists in the i2v template
+    assert tpl["376"]["class_type"] == "PrimitiveStringMultiline"
+
+
+def test_load_ltx25_image_to_video_template_has_image_node(ltx25_provider):
+    tpl = ltx25_provider.load_workflow_template(image_mode=True)
+    assert tpl["395"]["class_type"] == "LoadImage"
+
+
+def test_fill_ltx25_template_substitutes_all_tokens(ltx25_provider):
+    tpl = ltx25_provider.load_workflow_template(image_mode=False)
+    filled = ltx25_provider._fill_template(
+        tpl, prompt="a red fox", negative_prompt="blurry", width=768, height=512,
+        frames=5, fps=24, seed=42, filename_prefix="voxini_test",
+    )
+    assert filled["376"]["inputs"]["value"] == "a red fox"
+    assert filled["373"]["inputs"]["text"] == "blurry"
+    assert filled["372"]["inputs"]["value"] == 768
+    assert filled["360"]["inputs"]["value"] == 512
+    # {{FRAMES}} for ltx25 carries DURATION IN SECONDS, not a frame count -
+    # _fill_template itself doesn't know that distinction, it just writes
+    # whatever int _generate() passes in (see ComfyUIProvider._generate's
+    # local_model=="ltx25" branch).
+    assert filled["362"]["inputs"]["value"] == 5
+    assert filled["361"]["inputs"]["value"] == 24
+    assert filled["339"]["inputs"]["noise_seed"] == 42
+    assert filled["75"]["inputs"]["filename_prefix"] == "voxini_test"
+    assert "_comment" not in filled
+
+
+def test_fill_ltx25_image_to_video_template_image_filename(ltx25_provider):
+    tpl = ltx25_provider.load_workflow_template(image_mode=True)
+    filled = ltx25_provider._fill_template(
+        tpl, prompt="a red fox", negative_prompt="blurry", width=768, height=512,
+        frames=5, fps=24, seed=42, filename_prefix="voxini_test",
+        image_filename="ref_uploaded.png",
+    )
+    assert filled["395"]["inputs"]["image"] == "ref_uploaded.png"
+
+
+def test_ltx25_frame_math_is_duration_seconds_not_frame_count():
+    """Regression guard for the exact bug this integration had to avoid:
+    LTX-2.5's workflow computes its own frame count internally (duration *
+    fps + 1, via node 378's ComfyMathExpression), so ComfyUIProvider must
+    pass raw duration-in-seconds for {{FRAMES}} when local_model=="ltx25" -
+    NOT the Wan2.2 pre-computed ~4n+1 latent-length formula."""
+    from voxini_studio.providers.comfyui_provider import DEFAULT_FPS
+
+    duration = 6.0
+    wan22_frames = max(9, round(duration * DEFAULT_FPS) // 4 * 4 + 1)
+    ltx25_frames = max(1, round(duration))
+    assert ltx25_frames == 6
+    assert wan22_frames != ltx25_frames
 
 
 # -- job submission / polling / cancellation -----------------------------

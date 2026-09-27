@@ -20,6 +20,35 @@ class GenerationRequest:
     aspect_ratio: AspectRatio
     dest_path: Path
     model_id: str = ""
+    identity_stage_prompt: str = ""
+    """Prompt for the identity-scene pipeline's stage-1 SDXL still image
+    (see Scene.stage1_identity_prompt / ComfyUIProvider.
+    _generate_identity_scene_image) - deliberately NOT the same text as
+    resolved_prompt, which is written for a multi-frame video model and
+    always includes "every frame"/continuity language a still-image model
+    has no use for. Empty when the scene has no characters (nothing for
+    ComfyUIProvider to fall back to resolved_prompt for, since identity mode
+    only runs when there is a character reference photo to begin with)."""
+    identity_character_prompts: list[str] = field(default_factory=list)
+    """Task #637 (Mehrfigur-Workflow): per-character identity text blocks
+    (Character.prompt_block()), in the SAME order as
+    character_reference_paths - only populated (len > 1) when the scene has
+    more than one character AND the resolved provider actually declared
+    support for that many simultaneous references (see
+    Provider.max_simultaneous_references / resolve_scene_references()).
+    ComfyUIProvider._generate_multi_character_identity_scene_image() combines
+    each entry with identity_scene_description below to build that
+    character's own masked-region prompt. Empty (the normal case) for every
+    single-character or no-character scene - those keep using
+    identity_stage_prompt exactly as before, no behaviour change."""
+    identity_scene_description: str = ""
+    """Task #637: the scene's shared setting/action text with all character
+    identity blocks and video-only continuity language stripped out (see
+    Scene.stage1_scene_description()) - used together with
+    identity_character_prompts above so every masked region of a
+    multi-character composite still reflects the same background/setting,
+    not just that region's own character. Empty unless the scene has more
+    than one character."""
 
 
 @dataclass
@@ -58,6 +87,17 @@ class Provider(ABC):
     max_clip_seconds: float = 10.0
     supported_aspect_ratios: list[AspectRatio] = [AspectRatio.WIDESCREEN]
     requires_api_key: bool = False
+    max_simultaneous_references: int = 1
+    """Task #637 (Mehrfigur-Workflow): how many character/continuity
+    reference images this provider can actually use for ONE job at once.
+    1 (the default, matching every provider before this feature existed) -
+    a scene needing more than this is hard-blocked by generation_service.
+    resolve_scene_references() rather than silently sending only the first
+    reference and dropping the rest (binding reference rule). Only
+    ComfyUIProvider currently ever reports more than 1, and only while its
+    identity-scene pipeline is enabled - see its override below. A plain
+    class attribute (not a method) since it does not depend on the request,
+    only on which provider/mode is configured."""
 
     def info(self) -> ProviderInfo:
         return ProviderInfo(

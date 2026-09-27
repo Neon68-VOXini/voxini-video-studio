@@ -78,6 +78,26 @@ if not exist "%OUTPUT_EXE%" (
     exit /b 1
 )
 
+REM -- Startmenue-Verknuepfung anlegen/aktualisieren -------------------
+REM Windows kennt ein Programm nur dann als "installierte Anwendung"
+REM (z.B. fuer Tools, die per Namenssuche darauf zugreifen wollen), wenn
+REM dafuer ein Eintrag im Startmenue existiert. Ohne eigenen Installer
+REM legt PyInstaller so einen Eintrag nie an - deshalb hier bei jedem
+REM Build automatisch erzeugen/aktualisieren, damit das nie ein manueller
+REM Handgriff sein muss und nach jedem Neu-Build sofort auf die frisch
+REM gebaute .exe zeigt.
+echo.
+echo Erstelle/aktualisiere Startmenue-Verknuepfung ...
+set "SHORTCUT_PATH=%APPDATA%\Microsoft\Windows\Start Menu\Programs\VOXini Video Studio.lnk"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('%SHORTCUT_PATH%'); $sc.TargetPath = '%OUTPUT_EXE%'; $sc.WorkingDirectory = '%OUTPUT_DIR%'; $sc.IconLocation = '%OUTPUT_EXE%,0'; $sc.Save()"
+if errorlevel 1 (
+    echo WARNUNG: Startmenue-Verknuepfung konnte nicht erstellt/aktualisiert werden.
+    echo Das Programm laeuft trotzdem normal - nur die Erkennung als
+    echo "installierte Anwendung" ^(z.B. fuer Bildschirmzugriffs-Tools^) fehlt dann.
+) else (
+    echo Startmenue-Verknuepfung aktualisiert: %SHORTCUT_PATH%
+)
+
 echo.
 echo ============================================================
 echo  Build erfolgreich.

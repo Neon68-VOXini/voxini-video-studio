@@ -281,6 +281,89 @@ class Scene(BaseModel):
         parts.append(f"SCENE:\n{self.prompt_text}")
         return "\n\n".join(parts)
 
+    def stage1_scene_description(self) -> str:
+        """self.prompt_text with the video-only continuity/anti-drift
+        boilerplate stripped out - see stage1_identity_prompt() for why this
+        exists. For identity_lock_prompt_included=True scenes (imported from
+        a creative handoff), core/scene_plan_importer.py builds prompt_text
+        as "{reference_lock_prompt_prefix}\n\n{base_prompt}[\n\nAVOID:
+        {global_negative}]" - the approved anti-drift prefix (talks about
+        "every frame", "binding identity", etc.) is always the FIRST
+        paragraph by that construction, so it is dropped here. In practice
+        the imported plan's own base_prompt has also been observed to
+        repeat that exact same prefix text verbatim at its own start (task
+        #583 follow-up, 2026-09-05 - confirmed against the real imported
+        "WITHOUT EVER HAVING YOU NEU" scene plan), so any later paragraph
+        that starts with the dropped prefix has that leading occurrence
+        stripped too rather than only removing the standalone first
+        paragraph. A trailing "AVOID: ..." paragraph (negative-prompt
+        content folded into the positive text) is dropped too. For
+        VOXini-authored scenes (identity_lock_prompt_included=False),
+        prompt_text is already just the raw scene description with no such
+        prefix - returned unmodified (aside from the AVOID: strip) in that
+        case.
+
+        Public (not just an internal helper for stage1_identity_prompt() any
+        more) since the multi-character identity pipeline (task #637) needs
+        this SHARED scene/setting text on its own, separately from any single
+        character's identity block - each masked region of the composed
+        image gets [that character's prompt_block()] + [this shared scene
+        text], so the background/setting is consistent across all regions
+        while only the identity portion differs per region. See
+        ComfyUIProvider._generate_multi_character_identity_scene_image()."""
+        paragraphs = [p for p in self.prompt_text.split("\n\n") if p.strip()]
+        if self.identity_lock_prompt_included and paragraphs:
+            prefix_text = paragraphs[0].strip()
+            cleaned = []
+            for p in paragraphs[1:]:
+                stripped = p.strip()
+                if prefix_text and stripped.startswith(prefix_text):
+                    stripped = stripped[len(prefix_text):].strip()
+                if stripped:
+                    cleaned.append(stripped)
+            paragraphs = cleaned
+        paragraphs = [p for p in paragraphs if not p.strip().upper().startswith("AVOID:")]
+        return "\n\n".join(paragraphs).strip()
+
+    def stage1_identity_prompt(self, characters: dict[str, Character]) -> str:
+        """Prompt for the identity-scene pipeline's stage-1 SDXL still image
+        (see ComfyUIProvider._generate_identity_scene_image / Project.
+        comfyui_identity_scene_mode) - deliberately NOT the same text as
+        resolved_prompt() above. resolved_prompt() is written for a
+        multi-frame VIDEO model and always includes continuity language like
+        "the same person in every frame" / "from the first frame to the last
+        frame" (either VOXini's own _IDENTITY_LOCK_TEMPLATE, or - for
+        imported scenes - an equivalent approved block baked into
+        prompt_text itself). A single still-image SDXL model has no concept
+        of "frames" at all; feeding it that language was observed (task
+        #583 follow-up, 2026-09-05) to make SDXL literally depict a
+        multi-panel filmstrip/contact-sheet of many small repeated figures
+        with garbled text baked into the image, instead of one normal scene
+        photo - InstantID's ControlNet/face-embedding conditioning (not this
+        text prompt) is what actually carries facial identity into the
+        image, so the text prompt only needs to describe the visual scene.
+
+        Deliberately does NOT use resolved_prompt()'s "CHARACTERS:\n- ...\n\n
+        SCENE:\n..." label formatting either (confirmed by a live SDXL test,
+        task #583 follow-up, 2026-09-05): SDXL treats prominent capitalized
+        label words followed by a colon as an instruction to render an
+        actual on-screen text card/title card, not as inert structure -
+        it produced a garbled movie-title-card-style image ("CHARACTERS"/
+        "SCENE" rendered as stylised, misspelled on-screen text) instead of
+        a normal photo. The negative prompt already says "text, watermark"
+        but that alone was not enough to outweigh such a strong positive
+        signal, so the labels are avoided entirely here rather than relied
+        on the negative prompt to suppress them. Character descriptions are
+        folded into a plain sentence instead."""
+        present = [characters[cid] for cid in self.character_ids if cid in characters]
+        visual = self.stage1_scene_description()
+        if not present:
+            return visual
+        character_intro = "; ".join(c.prompt_block() for c in present)
+        if not visual:
+            return character_intro
+        return f"{character_intro}. {visual}"
+
 
 class ProviderConfig(BaseModel):
     """Per-provider settings stored in the project (not secrets - API keys
@@ -344,10 +427,27 @@ class Project(BaseModel):
     locks the whole first frame to the reference photo. Requires the user
     to install the ComfyUI_InstantID custom node + its model files once;
     VOXini does not bundle or auto-download them."""
-    comfyui_identity_checkpoint: str = "sd_xl_base_1.0.safetensors"
+    comfyui_identity_checkpoint: str = "SDXL\\sd_xl_base_1.0.safetensors"
     """SDXL checkpoint filename (must already exist in ComfyUI's
     models/checkpoints/) used for the identity-scene stage above. Only
-    read when comfyui_identity_scene_mode is True."""
+    read when comfyui_identity_scene_mode is True. Must match exactly what
+    ComfyUI's own checkpoint listing reports (folder_paths.get_filename_list),
+    which includes the subfolder as a prefix (e.g. "SDXL\\sd_xl_base_1.0.
+    safetensors" for a checkpoint placed in models/checkpoints/SDXL/) -
+    passing just the bare filename fails CheckpointLoaderSimple's input
+    validation with "Value not in list" if the file lives in a subfolder."""
+
+    comfyui_local_model: str = "wan22"
+    """Which local model ComfyUIProvider uses: 'wan22' (Wan2.2 TI2V 5B,
+    default) or 'ltx25' (LTX-2.5 22B). Off/unchanged by default so existing
+    projects keep generating with Wan2.2 exactly as before - same rationale
+    as comfyui_identity_scene_mode above. LTX-2.5 needs its own gated
+    Hugging Face model files (huggingface.co/Lightricks/LTX-2.5) that VOXini
+    does not bundle or auto-download, and in practice needs a larger Windows
+    pagefile to memory-map its 22B-parameter weights. See
+    ComfyUIProvider._LOCAL_MODELS and voxini_studio/providers/workflows/
+    ltx25_*.json for the live-tested (text-to-video) / not-yet-independently-
+    live-tested (image-to-video) workflow templates."""
 
     comfyui_resolution: str = "720p"
     """'480p' or '720p' - passed straight to ComfyUIProvider(resolution=...).
@@ -394,6 +494,28 @@ class Project(BaseModel):
     runway_spent_total: float = 0.0
     """Running total of actual_cost across all accepted Runway ClipVersions
     in this project - used to enforce runway_budget_limit."""
+
+    # -- Task #665: Kling/Seedance/Veo cloud providers ---------------------
+    # Same pattern as the runway_* fields above (model id + optional hard
+    # budget ceiling + running spend total), one triplet per new provider.
+    # Multi-character support (the entire point of adding these three - see
+    # the "Bau alle ein" pivot away from the local ComfyUI multi-character
+    # pipeline) needs no extra field here: character_reference_paths is
+    # already list[str] at the GenerationRequest level, and each provider's
+    # own max_simultaneous_references caps how many of those paths it
+    # actually uses (see kling_provider.py/seedance_provider.py/
+    # veo_provider.py).
+    kling_model_id: str = "kling-v3-0"
+    kling_budget_limit: float = 0.0
+    kling_spent_total: float = 0.0
+
+    seedance_model_id: str = "doubao-seedance-1-0-lite-i2v-250428"
+    seedance_budget_limit: float = 0.0
+    seedance_spent_total: float = 0.0
+
+    veo_model_id: str = "veo-3.1-generate-preview"
+    veo_budget_limit: float = 0.0
+    veo_spent_total: float = 0.0
 
     face_verification_enabled: bool = False
     """Off by default so existing projects/behaviour never change silently

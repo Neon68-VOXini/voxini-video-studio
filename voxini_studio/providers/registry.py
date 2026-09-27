@@ -17,8 +17,11 @@ from __future__ import annotations
 
 from voxini_studio.providers.base import Provider
 from voxini_studio.providers.comfyui_provider import ComfyUIProvider
+from voxini_studio.providers.kling_provider import KlingProvider
 from voxini_studio.providers.mock_provider import MockProvider
 from voxini_studio.providers.runway_provider import RunwayProvider
+from voxini_studio.providers.seedance_provider import SeedanceProvider
+from voxini_studio.providers.veo_provider import VeoProvider
 
 _REGISTRY: dict[str, Provider] = {}
 
@@ -53,12 +56,22 @@ def build_provider(project, provider_id: str) -> Provider:
             identity_checkpoint=project.comfyui_identity_checkpoint,
             negative_prompt=project.comfyui_negative_prompt,
             identity_negative_prompt=project.comfyui_identity_negative_prompt,
+            local_model=project.comfyui_local_model,
         )
     if provider_id == "runway":
         return RunwayProvider(model_id=project.runway_model_id)
+    if provider_id == "kling":
+        return KlingProvider(model_id=project.kling_model_id)
+    if provider_id == "seedance":
+        return SeedanceProvider(model_id=project.seedance_model_id)
+    if provider_id == "veo":
+        return VeoProvider(model_id=project.veo_model_id)
     raise KeyError(f"Unknown provider: {provider_id!r}")
 
 
 register(MockProvider())
 register(ComfyUIProvider())
 register(RunwayProvider())
+register(KlingProvider())
+register(SeedanceProvider())
+register(VeoProvider())

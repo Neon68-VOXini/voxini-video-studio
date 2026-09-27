@@ -1,0 +1,159 @@
+NEON GRAVEYARD — Prompts für KI-Video-Generatoren (v2, exakte Timings)
+
+Song: Neon Graveyard (Neon68) · Länge: 4:05 · Industrial Dark Pop / Horror-Ästhetik, ~80–90 BPM
+
+VISUELLE IDENTITÄT (in jeden Prompt übernommen):
+sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain
+
+WIEDERKEHRENDE FIGUR "HOHL":
+a tall hooded figure in a tattered black cloak, face completely hidden in shadow beneath the hood, thin pale hands
+
+NEGATIV-PROMPT (fuer alle Szenen):
+no text, no logos, no watermark, no subtitles, no distorted hands, no extra limbs, no cartoonish look
+
+0:00–0:10 | Shot 1 - Dolly In Through Cemetery Gates
+Slow creeping dolly-in shot through wrought iron cemetery gates at night, pushing toward a glowing gothic cathedral in the distance, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Weeping angel statue and cracked gravestones in foreground, a raven on a stone cross. Oppressive silence, slow heartbeat pacing.
+
+0:10–0:19 | Shot 2 - Candle Flame Flicker
+Extreme close-up of a single candle flame flickering violently in a dark room, wind blowing a thin curtain by a window, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Shadows dancing on the wall. Slow motion, tense build-up.
+
+0:19–0:23 | Shot 3 - Stretching Shadow
+A long human shadow stretching unnaturally across an old hardwood floor, camera slowly panning to follow it, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Wood creaks. Slow, unsettling movement.
+
+0:23–0:28 | Shot 4 - Knocking Kitchen Door
+Static shot of an old wooden kitchen door, autumn wind rattling it, three sharp knocks sound with nobody there, dead leaves swirling past, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Tense stillness.
+
+0:27–0:31 | Shot 5 - Match Lights Candle
+Close-up of a match striking and igniting a single candle in complete darkness, the flame slowly lighting a worried face partially in shadow, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Fragile, intimate lighting.
+
+0:31–0:36 | Shot 6 - Tombstones Under Copper Sky
+Wide low-angle shot drifting slowly across a row of ancient tombstones under a strange copper-tinted night sky, thick fog crawling along the ground, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Foreboding, patient camera move.
+
+0:36–0:41 | Shot 7 - Cracked Mirror Reflection
+Close-up on an antique cracked mirror, a person's reflection stands still while something dark moves behind them in the glass that isn't there in the room, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Slow zoom in, dread building.
+
+0:41–0:50 | Shot 8 - Reversed Storm Clouds
+Time-lapse style shot of copper-orange storm clouds swirling unnaturally backwards across a night sky, faint ghostly shapes briefly visible within the clouds, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Warped, reversed, otherworldly motion.
+
+0:50–0:54 | Shot 9 - Creaking Floorboard
+Extreme close-up of an old wooden floorboard creaking under a slow footstep, dust floating in a thin beam of moonlight, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Dead silence, single footstep sound.
+
+0:54–0:58 | Shot 10 - Clock Strikes Midnight
+An ornate antique clock striking midnight, hands glowing sickly yellow-green, gears grinding in close-up, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. A deep church bell tolls.
+
+0:58–1:01 | Shot 11 - Welcome To The Neon Graveyard
+Wide aerial shot slowly descending over a neon-lit gothic graveyard as masked figures in Victorian costumes begin gathering among the tombstones, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Dreamlike, growing unease.
+
+1:01–1:06 | Shot 12 - Masked Figures Dancing
+Masked figures beginning to sway and dance slowly between gravestones, translucent ghostly silhouettes drifting among them, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Slow motion, eerie grace.
+
+1:06–1:10 | Shot 13 - Placing The Mask
+Close-up of pale hands slowly placing a cracked porcelain masquerade mask over a face, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Deliberate, ritualistic movement.
+
+1:10–1:14 | Shot 14 - Grotesque Masked Revelers
+Wide shot of grotesque masked revelers among tombstones, some with subtly monstrous features under their masks, arms raised toward the moon, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Unsettling carnival energy.
+
+1:14–1:18 | Shot 15 - Beautiful Wicked Mask Reveal
+Slow close-up reveal of an elegant masked face, beautiful yet unnervingly wrong, glowing yellow-green eyes behind the mask, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Seductive and sinister.
+
+1:18–1:22 | Shot 16 - Hohl Turns To Camera
+A tall hooded figure in a tattered black cloak, face completely hidden in shadow beneath the hood, thin pale hands, turning slowly to face the camera directly, extending one pale hand in invitation, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Direct address, unsettling intimacy.
+
+1:22–1:30 | Shot 17a - Crowd Swaying In Fog
+Slow motion wide shot of the masked crowd swaying together in the fog, neon light pulsing softly across the graveyard, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Dreamlike, hypnotic.
+
+1:30–1:38 | Shot 17b - Fog Swallows The Graveyard
+Thick fog rolling in and slowly swallowing the entire graveyard scene from a high wide angle, figures fading into the mist, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Quiet, ominous calm before the next verse.
+
+1:38–1:41 | Shot 18 - Grinning Jack-o-Lanterns
+Row of grinning jack-o'-lanterns on a stone wall, candlelight flickering inside each, carved smiles unnervingly wide, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Slow tracking shot left to right.
+
+1:41–1:46 | Shot 19 - Hungry Flame Flare
+Close-up on jack-o'-lantern flames flaring up hungrily as if breathing, carved eyes seeming to follow the camera, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Slow push-in, predatory stillness.
+
+1:46–1:49 | Shot 20 - Candy Wrappers In Street
+Silver candy wrappers scattered across a cracked wet street, blown by wind, neon reflections rippling in puddles, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Low-angle tracking shot.
+
+1:49–1:53 | Shot 21 - Marching Silhouettes
+Group of small silhouetted figures marching in unison through thick fog, heavy synchronized footsteps, faces unseen, approaching the camera, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Ominous, growing tension.
+
+1:52–1:57 | Shot 22 - Children Turn To Camera
+The marching child-sized silhouettes stop and slowly turn toward the camera in unison, faces obscured by plain masks, heads tilting unnaturally, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Sudden creeping dread.
+
+1:57–2:00 | Shot 23 - TV Static Burst
+An old CRT television bursting into loud static, screen glow flickering yellow-green across a dark empty room, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Abrupt, jarring cut.
+
+2:00–2:07 | Shot 24 - Footstep In Cathedral
+Extreme close-up of a slow footstep echoing on ancient cracked cathedral stone floor, dust drifting in shafts of moonlight, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Cold echo, dead silence.
+
+2:07–2:11 | Shot 25 - Cathedral Bell Tower
+A massive cathedral bell tower shot from below, the bell tolling midnight, vibrations rippling through fog, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Slow low-angle shot.
+
+2:11–2:15 | Shot 26 - Cathedral Rose Window Dance
+Interior of a gothic cathedral lit by a massive glowing rose window in sickly yellow-green neon, masked figures dancing slowly between the pews, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Wide symmetrical shot, slowly rotating.
+
+2:15–2:18 | Shot 27 - Cathedral Aisle Dancers
+Masked dancers moving slowly through the cathedral aisle, ghostly translucent figures dancing alongside them, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Slow motion, dreamlike.
+
+2:19–2:22 | Shot 28 - Second Mask Ritual
+Close-up of a different ornate mask being lifted and placed over a face inside the candlelit cathedral, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Deliberate, ritual repetition.
+
+2:23–2:26 | Shot 29 - Full Congregation
+Wide shot of the full masked congregation filling the cathedral pews, arms raised, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Grand, unsettling scale.
+
+2:26–2:30 | Shot 30 - Hohl At The Altar
+A tall hooded figure in a tattered black cloak, face completely hidden in shadow beneath the hood, thin pale hands, standing motionless at the stone altar beneath the glowing rose window, cloak moving slightly as if breathing, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Low-angle hero shot.
+
+2:30–2:34 | Shot 31 - Hohl Tilts Head
+A tall hooded figure in a tattered black cloak, face completely hidden in shadow beneath the hood, thin pale hands, slowly tilting its head toward the camera, a faint glow beginning to show beneath the hood, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Quiet menace.
+
+2:34–2:41 | Shot 32 - Cathedral Lights Dim
+Camera slowly pulling back and up from the altar as the cathedral lights dim one by one, the crowd going completely still, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Energy draining out of the scene, silence approaching.
+
+2:41–2:43 | Shot 33 - VHS Transition Pan Left
+Lo-fi VHS transition effect, horizontal scan lines sweeping across a dark frame, camera slowly panning left, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Degraded film texture, unsettling calm.
+
+2:43–2:47 | Shot 34 - Whispering Lips Close-Up
+Extreme close-up on cracked pale lips whispering silently, vintage VHS/lo-fi film grain, faint scan lines, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Intimate, unsettling framing.
+
+2:47–2:51 | Shot 35 - Dragging Chains Pan Right
+Slow motion shot of heavy rusted metal chains dragging across a stone cemetery floor, dust and fog swirling, camera panning right, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Harsh side lighting, dread building.
+
+2:51–2:55 | Shot 36 - Frozen Crowd
+The entire crowd of masked dancers frozen mid-motion in the graveyard, completely still like a held breath, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Tense silence.
+
+2:55–2:58 | Shot 37 - Punch-In Sub-Bass Drop
+Fast punch-in zoom on the hooded figure's shadowed face right as the frame flashes with neon light, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Sudden explosive impact, hard cut energy.
+
+2:58–3:06 | Shot 38 - Crane Shot Crowd Erupts
+Dynamic sweeping crane shot rising over the masked crowd as they erupt into wild dancing, neon lights strobing yellow-green across the graveyard, fog swirling violently, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Maximum energy, fast motion.
+
+3:06–3:10 | Shot 39 - Hohl Spins With Cloak
+A tall hooded figure in a tattered black cloak, face completely hidden in shadow beneath the hood, thin pale hands, spinning with cloak flaring outward, neon sparks bursting from cracked tombstones like fireworks, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Fast dynamic camera.
+
+3:10–3:14 | Shot 40 - Rack Focus Through Crowd
+Fast rack-focus shot moving through the dancing crowd of masked revelers, neon light flaring across the lens, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Chaotic, euphoric energy.
+
+3:14–3:18 | Shot 41 - Extreme Wide Chaos
+Extreme wide shot of the entire graveyard packed with dancing figures under strobing neon light, camera swooping low across the crowd, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Full chaos, maximum scale.
+
+3:18–3:22 | Shot 42 - Ecstatic Dancer Close-Up
+Close-up of an ecstatic masked dancer mid-spin, neon light flaring directly across the lens, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Euphoric, blinding energy.
+
+3:22–3:26 | Shot 43 - Hohl Triumphant Arms Wide
+A tall hooded figure in a tattered black cloak, face completely hidden in shadow beneath the hood, thin pale hands, throwing both arms wide as neon-colored sparks explode outward from the tombstones around it, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Triumphant, explosive climax.
+
+3:26–3:33 | Shot 44 - Ascending Away From Graveyard
+Camera pulling straight upward away from the chaotic graveyard party into the night sky, the neon glow shrinking below into the fog, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Energy fading, ascending motion.
+
+3:33–3:38 | Shot 45 - Single Candle In Empty Room
+Extreme close-up of a single candle flame in total darkness, camera slowly pulling back to reveal an empty silent room, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Very slow, quiet, dread building.
+
+3:38–3:40 | Shot 46 - Shadow Behind Camera
+A dark shadow briefly passes directly behind the camera lens, barely visible at the edge of frame, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Sudden, unsettling, breaking the fourth wall.
+
+3:40–3:46 | Shot 47 - Candle Snuffed To Black
+The candle flame is suddenly snuffed out by an unseen cold breath right next to the lens, cutting instantly to complete black, sickly acid yellow-green neon glow against near-black darkness, thick rolling fog, gothic cemetery, cracked weathered tombstones, wrought iron gates, a distant cyberpunk city skyline bleeding neon on the horizon, full moon behind clouds, horror movie cinematography, moody volumetric lighting, ultra-detailed, cinematic, 35mm film grain. Sharp, cold, final.
+
+3:46–4:05 | Shot 48 - Fade Hold On Black
+Complete black screen holding steady, then a very slow, faint fade-in of the Neon Graveyard cover artwork glowing sickly acid yellow-green against near-black darkness, cinematic, 35mm film grain, ultra-detailed. Silent fade to end, no motion, contemplative closing hold.
