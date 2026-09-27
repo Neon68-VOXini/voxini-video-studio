@@ -377,14 +377,22 @@ def test_load_identity_template_has_expected_nodes(provider):
 
 
 def test_fill_identity_template_substitutes_checkpoint_and_tokens(provider):
+    # image_kps_filename must be passed here too: task #658 (2026-09-xx,
+    # "Übergroße/abgeschnittene Gesichter in JEDER Identitäts-Szene") made
+    # node "13"'s {{IMAGE_KPS_FILENAME}} a required, unconditional token in
+    # this template - without it, _fill_template()'s leftover-token safety
+    # check correctly rejects the fill (this test predates that change,
+    # which is why it used to omit the argument).
     tpl = provider.load_identity_template()
     filled = provider._fill_template(
         tpl, prompt="on a neon stage", negative_prompt="blurry",
         width=1216, height=704, seed=7, filename_prefix="voxini_identity_test",
         image_filename="face.png", checkpoint_name="my_sdxl.safetensors",
+        image_kps_filename="face_kps.png",
     )
     assert filled["1"]["inputs"]["ckpt_name"] == "my_sdxl.safetensors"
     assert filled["5"]["inputs"]["image"] == "face.png"
+    assert filled["13"]["inputs"]["image"] == "face_kps.png"
     assert filled["6"]["inputs"]["text"] == "on a neon stage"
     assert filled["7"]["inputs"]["text"] == "blurry"
     assert filled["9"]["inputs"]["width"] == 1216
