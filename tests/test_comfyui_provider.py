@@ -12,6 +12,7 @@ import subprocess
 
 import pytest
 
+from voxini_studio.core import ffmpeg_locator
 from voxini_studio.models.project import AspectRatio, Scene
 from voxini_studio.providers.base import GenerationRequest
 from voxini_studio.providers.comfyui_provider import (
@@ -120,7 +121,12 @@ def test_unknown_local_model_falls_back_to_wan22(server):
 
 def test_load_ltx25_text_to_video_template_has_no_image_node(ltx25_provider):
     tpl = ltx25_provider.load_workflow_template(image_mode=False)
-    assert "395" not in tpl  # LoadImage only exists in the i2v template
+    # Node id "395" happens to exist in BOTH templates, but for a different
+    # class_type in each (ManualSigmas here vs. LoadImage in the i2v
+    # template) - ComfyUI node ids are just per-file integers, not a shared
+    # namespace, so checking the key's absence was a false assumption.
+    # What actually matters (no LoadImage node in the t2v graph) is this:
+    assert all(node.get("class_type") != "LoadImage" for node in tpl.values() if isinstance(node, dict))
     assert tpl["376"]["class_type"] == "PrimitiveStringMultiline"
 
 
@@ -284,7 +290,7 @@ def test_upscale_local_produces_1080_height(provider, tmp_path):
     provider._upscale_local(src, dest, target_height=1080)
     assert dest.exists()
     probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+        [ffmpeg_locator.ffprobe_path(), "-v", "error", "-select_streams", "v:0",
          "-show_entries", "stream=height", "-of", "json", str(dest)],
         capture_output=True, text=True,
     )

@@ -17,15 +17,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from voxini_studio.core import ffmpeg_locator
+
 
 def _make_tiny_mp4() -> bytes:
     """Renders a genuinely valid (tiny) mp4 with real ffmpeg so the
     provider's download + local-upscale step has real video bytes to work
-    with, exactly like a real ComfyUI output file would provide."""
+    with, exactly like a real ComfyUI output file would provide.
+
+    Resolves the executable via ffmpeg_locator instead of a bare "ffmpeg"
+    command name - on a Windows machine with only the app's bundled ffmpeg
+    and nothing on the system PATH, a bare "ffmpeg" fails with a
+    FileNotFoundError, taking every test that depends on this fixture down
+    with it (see mock_provider.py's analogous fix for the same root cause:
+    code bypassing ffmpeg_locator instead of resolving through it)."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "tiny.mp4"
         cmd = [
-            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1:r=8",
+            ffmpeg_locator.ffmpeg_path(), "-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1:r=8",
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
             str(out), "-loglevel", "error",
         ]

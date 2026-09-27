@@ -295,6 +295,15 @@ class ComfyUIProvider(Provider):
         checkpoint_name: Optional[str] = None,
         image_kps_filename: Optional[str] = None,
     ) -> dict:
+        # Strip _comment BEFORE building raw, not after: the LTX-2.5
+        # templates' _comment documents each token in plain English (e.g.
+        # "{{SEED}} into node 339's noise_seed...") for human readers, and
+        # that unquoted mention doesn't match the numeric tokens' only real
+        # substitution pattern (the quoted '"{{SEED}}"' form below) - left
+        # in raw, it was a false positive for the leftover-token safety
+        # check further down, wrongly rejecting an otherwise-correct fill.
+        template = dict(template)
+        template.pop("_comment", None)
         raw = json.dumps(template)
         substitutions = {
             "{{PROMPT}}": prompt,
